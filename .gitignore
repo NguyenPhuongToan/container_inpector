@@ -1,0 +1,35 @@
+﻿# Local environment
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Backend runtime data
+backend_python/uploads/
+backend_python/reports/
+backend_python/exports/
+backend_python/logs/
+backend_python/tmp/
+backend_python/data/*.db
+
+# Flutter / Dart
+frontend_flutter/.dart_tool/
+frontend_flutter/.flutter-plugins
+frontend_flutter/.flutter-plugins-dependencies
+frontend_flutter/build/
+frontend_flutter/.pub-cache/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

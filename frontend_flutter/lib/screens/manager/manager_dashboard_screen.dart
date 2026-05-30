@@ -1,0 +1,451 @@
+﻿import 'package:flutter/material.dart';
+
+import '../../models/inspection.dart';
+import '../../services/api_service.dart';
+import '../../widgets/status_badge.dart';
+import 'manager_review_screen.dart';
+
+class ManagerDashboardScreen extends StatefulWidget {
+  const ManagerDashboardScreen({super.key});
+
+  @override
+  State<ManagerDashboardScreen> createState() => _ManagerDashboardScreenState();
+}
+
+class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
+  final _apiService = ApiService();
+  final _containerController = TextEditingController();
+  final _workerController = TextEditingController();
+  final _portController = TextEditingController();
+  String _status = 'submitted';
+  late Future<List<ContainerInspection>> inspectionsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    inspectionsFuture = _loadInspections();
+  }
+
+  @override
+  void dispose() {
+    _containerController.dispose();
+    _workerController.dispose();
+    _portController.dispose();
+    super.dispose();
+  }
+
+  Future<List<ContainerInspection>> _loadInspections() {
+    return _apiService.getInspections(
+      status: _status.isEmpty ? null : _status,
+      containerNumber: _containerController.text.trim(),
+      workerName: _workerController.text.trim(),
+      portName: _portController.text.trim(),
+    );
+  }
+
+  Future<void> refresh() async {
+    setState(() {
+      inspectionsFuture = _loadInspections();
+    });
+
+    await inspectionsFuture;
+  }
+
+  void _setStatus(String status) {
+    setState(() {
+      _status = status;
+      inspectionsFuture = _loadInspections();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Manager Review'),
+        actions: [
+          IconButton(
+            onPressed: refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _FilterPanel(
+            status: _status,
+            containerController: _containerController,
+            workerController: _workerController,
+            portController: _portController,
+            onStatusChanged: _setStatus,
+            onApply: refresh,
+            onClear: () {
+              _containerController.clear();
+              _workerController.clear();
+              _portController.clear();
+              _setStatus('submitted');
+            },
+          ),
+          Expanded(
+            child: FutureBuilder<List<ContainerInspection>>(
+              future: inspectionsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return _MessageState(
+                    icon: Icons.cloud_off_rounded,
+                    title: 'Cannot load inspections',
+                    message: 'Check backend connection and manager login.',
+                    onRetry: refresh,
+                  );
+                }
+
+                final inspections = snapshot.data ?? [];
+
+                if (inspections.isEmpty) {
+                  return _MessageState(
+                    icon: Icons.inbox_rounded,
+                    title: 'No inspections found',
+                    message:
+                        'Worker submissions matching these filters will appear here.',
+                    onRetry: refresh,
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: refresh,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: inspections.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final inspection = inspections[index];
+
+                      return Material(
+                        color: Colors.white,
+                        elevation: 2,
+                        shadowColor: Colors.black.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ManagerReviewScreen(
+                                  inspection: inspection,
+                                ),
+                              ),
+                            );
+                            await refresh();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF075DCC)
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.inventory_2_outlined,
+                                    color: Color(0xFF075DCC),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        inspection.containerNumber,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${inspection.portName} - ${inspection.workerName} - ${inspection.formattedDate}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Color(0xFF667085),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                StatusBadge(status: inspection.status),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterPanel extends StatelessWidget {
+  final String status;
+  final TextEditingController containerController;
+  final TextEditingController workerController;
+  final TextEditingController portController;
+  final ValueChanged<String> onStatusChanged;
+  final VoidCallback onApply;
+  final VoidCallback onClear;
+
+  const _FilterPanel({
+    required this.status,
+    required this.containerController,
+    required this.workerController,
+    required this.portController,
+    required this.onStatusChanged,
+    required this.onApply,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+        child: Column(
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _StatusChip(
+                    label: 'All',
+                    value: '',
+                    status: status,
+                    onChanged: onStatusChanged,
+                  ),
+                  _StatusChip(
+                    label: 'Submitted',
+                    value: 'submitted',
+                    status: status,
+                    onChanged: onStatusChanged,
+                  ),
+                  _StatusChip(
+                    label: 'Accepted',
+                    value: 'accepted',
+                    status: status,
+                    onChanged: onStatusChanged,
+                  ),
+                  _StatusChip(
+                    label: 'Rejected',
+                    value: 'rejected',
+                    status: status,
+                    onChanged: onStatusChanged,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 720;
+                final fields = [
+                  _FilterField(
+                    controller: containerController,
+                    label: 'Container',
+                    icon: Icons.numbers_rounded,
+                    onSubmitted: onApply,
+                  ),
+                  _FilterField(
+                    controller: workerController,
+                    label: 'Worker',
+                    icon: Icons.person_rounded,
+                    onSubmitted: onApply,
+                  ),
+                  _FilterField(
+                    controller: portController,
+                    label: 'Port',
+                    icon: Icons.location_on_rounded,
+                    onSubmitted: onApply,
+                  ),
+                ];
+
+                if (!wide) {
+                  return Column(
+                    children: [
+                      for (final field in fields) ...[
+                        field,
+                        const SizedBox(height: 8),
+                      ],
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: onClear,
+                              child: const Text('Clear'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: onApply,
+                              child: const Text('Apply'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    for (final field in fields) ...[
+                      Expanded(child: field),
+                      const SizedBox(width: 8),
+                    ],
+                    OutlinedButton(
+                      onPressed: onClear,
+                      child: const Text('Clear'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: onApply,
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final String status;
+  final ValueChanged<String> onChanged;
+
+  const _StatusChip({
+    required this.label,
+    required this.value,
+    required this.status,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: status == value,
+        onSelected: (_) => onChanged(value),
+      ),
+    );
+  }
+}
+
+class _FilterField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final VoidCallback onSubmitted;
+
+  const _FilterField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (_) => onSubmitted(),
+      decoration: InputDecoration(
+        isDense: true,
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
+class _MessageState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final VoidCallback onRetry;
+
+  const _MessageState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 54, color: const Color(0xFF075DCC)),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF667085),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
