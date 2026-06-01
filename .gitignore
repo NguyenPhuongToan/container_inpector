@@ -34,3 +34,5 @@ frontend_flutter/.pub-cache/
 .DS_Store
 Thumbs.db
 "frontend_flutter/.dart_appdata/" 
+frontend_flutter/.dart_appdata/ 
+frontend_flutter/android/build/ 
