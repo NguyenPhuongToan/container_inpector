@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'services/auth_session.dart';
-import 'screens/home_screen.dart';
-import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AuthSession.load();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -67,9 +64,7 @@ class ContainerInspectionApp extends StatelessWidget {
           ),
         ),
       ),
-      home: AuthSession.isLoggedIn
-          ? HomeScreen(user: AuthSession.user!)
-          : const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }

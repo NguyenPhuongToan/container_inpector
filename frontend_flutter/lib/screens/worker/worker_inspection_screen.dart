@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/image_slot.dart';
 import '../../services/api_service.dart';
 import '../../widgets/camera_card.dart';
+import 'worker_history_screen.dart';
 
 class WorkerInspectionScreen extends StatefulWidget {
   const WorkerInspectionScreen({super.key});
@@ -28,6 +29,8 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
 
   late final List<ImageSlot> slots;
   bool isSubmitting = false;
+
+  int get _addedPhotoCount => slots.where((slot) => slot.isCaptured).length;
 
   @override
   void initState() {
@@ -140,6 +143,14 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
   }
 
   Future<void> submitInspection() async {
+    if (_containerNumberController.text.trim().isEmpty) {
+      _showMessage(
+        'Container number is required',
+        backgroundColor: const Color(0xFFE53935),
+      );
+      return;
+    }
+
     final isFormValid = _formKey.currentState?.validate() ?? false;
     final images = slots
         .where((slot) => slot.image != null)
@@ -166,10 +177,19 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         images: images,
       );
 
-      _showMessage('Inspection submitted to manager.');
-      if (mounted) {
-        _resetInspection();
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Inspection submitted successfully!'),
+          backgroundColor: Color(0xFF437A22),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const WorkerHistoryScreen()),
+        (route) => route.isFirst,
+      );
     } on TimeoutException {
       _showMessage('Upload timed out. Please try again.');
     } catch (_) {
@@ -183,25 +203,12 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     }
   }
 
-  void _resetInspection() {
-    _formKey.currentState?.reset();
-    _containerNumberController.clear();
-    _bookingNumberController.clear();
-    _truckNumberController.clear();
-    _workerNameController.clear();
-    _portNameController.clear();
-    _notesController.clear();
-
-    setState(() {
-      for (final slot in slots) {
-        slot.image = null;
-      }
-    });
-  }
-
-  void _showMessage(String message) {
+  void _showMessage(String message, {Color? backgroundColor}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
     );
   }
 
@@ -223,6 +230,17 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                   completed: completed,
                   total: slots.length,
                   progress: progress,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$_addedPhotoCount / 14 photos added',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _addedPhotoCount == 14
+                        ? const Color(0xFF437A22)
+                        : const Color(0xFF667085),
+                  ),
                 ),
                 const SizedBox(height: 18),
                 _ContainerInfoForm(

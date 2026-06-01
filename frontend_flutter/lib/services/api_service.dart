@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
@@ -7,11 +9,21 @@ import '../models/app_user.dart';
 import '../models/inspection.dart';
 import 'auth_session.dart';
 
+class SessionExpiredException implements Exception {
+  const SessionExpiredException();
+
+  @override
+  String toString() => 'Session expired. Please log in again.';
+}
+
 class ApiService {
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
-  );
+  static String get baseUrl {
+    const env = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    if (env.isNotEmpty) return env;
+    if (kIsWeb) return 'http://127.0.0.1:8000/api';
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
+    return 'http://127.0.0.1:8000/api';
+  }
 
   Map<String, String> get _jsonHeaders {
     final headers = {'Accept': 'application/json'};
@@ -20,6 +32,13 @@ class ApiService {
       headers['Authorization'] = 'Bearer $token';
     }
     return headers;
+  }
+
+  void _checkUnauthorized(http.Response response) {
+    if (response.statusCode == 401) {
+      AuthSession.clear();
+      throw const SessionExpiredException();
+    }
   }
 
   Future<AppUser> login({
@@ -128,6 +147,7 @@ class ApiService {
           const Duration(seconds: 45),
         );
     final response = await http.Response.fromStream(streamedResponse);
+    _checkUnauthorized(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to submit inspection: ${response.body}');
@@ -153,6 +173,7 @@ class ApiService {
           const Duration(seconds: 25),
         );
     final response = await http.Response.fromStream(streamedResponse);
+    _checkUnauthorized(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Failed to scan container ID: ${response.body}');
@@ -193,13 +214,48 @@ class ApiService {
       uri,
       headers: _jsonHeaders,
     );
+    _checkUnauthorized(response);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to load inspections: ${response.body}');
     }
 
     final List data = jsonDecode(response.body);
-    return data.map((item) => ContainerInspection.fromJson(item)).toList();
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ContainerInspection.fromJson)
+        .toList();
+  }
+
+  Future<ContainerInspection> getInspectionById(String id) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/inspections/$id'),
+      headers: _jsonHeaders,
+    );
+    _checkUnauthorized(response);
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load inspection: ${response.body}');
+    }
+
+    final Map<String, dynamic> data = jsonDecode(response.body);
+    return ContainerInspection.fromJson(data);
+  }
+
+  Future<void> updateInspectionStatus(String id, String status) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/inspections/$id/status'),
+      headers: {
+        ..._jsonHeaders,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'status': status}),
+    );
+    _checkUnauthorized(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to update status: ${response.body}');
+    }
   }
 
   Future<List<ContainerInspection>> getSubmittedInspections() {
@@ -231,6 +287,7 @@ class ApiService {
       Uri.parse(url),
       headers: _jsonHeaders,
     );
+    _checkUnauthorized(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Request failed: ${response.body}');
@@ -242,6 +299,7 @@ class ApiService {
       Uri.parse(url),
       headers: _jsonHeaders,
     );
+    _checkUnauthorized(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Request failed: ${response.body}');

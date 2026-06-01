@@ -2,7 +2,9 @@
 
 import '../../models/inspection.dart';
 import '../../services/api_service.dart';
+import '../../widgets/inspection_card_skeleton.dart';
 import '../../widgets/status_badge.dart';
+import 'worker_inspection_detail_screen.dart';
 
 class WorkerHistoryScreen extends StatefulWidget {
   const WorkerHistoryScreen({super.key});
@@ -89,7 +91,12 @@ class _WorkerHistoryScreenState extends State<WorkerHistoryScreen> {
               future: _future,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: 6,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, __) => const InspectionCardSkeleton(),
+                  );
                 }
 
                 if (snapshot.hasError) {
@@ -103,11 +110,15 @@ class _WorkerHistoryScreenState extends State<WorkerHistoryScreen> {
 
                 final inspections = snapshot.data ?? [];
                 if (inspections.isEmpty) {
-                  return _HistoryMessage(
-                    icon: Icons.inbox_rounded,
-                    title: 'No inspections found',
-                    message: 'Your submitted inspections will appear here.',
-                    onRetry: _refresh,
+                  return RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 160),
+                        _EmptyHistoryState(),
+                      ],
+                    ),
                   );
                 }
 
@@ -119,7 +130,18 @@ class _WorkerHistoryScreenState extends State<WorkerHistoryScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final inspection = inspections[index];
-                      return _HistoryTile(inspection: inspection);
+                      return _HistoryTile(
+                        inspection: inspection,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => WorkerInspectionDetailScreen(
+                                inspection: inspection,
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     },
                   ),
                 );
@@ -134,67 +156,150 @@ class _WorkerHistoryScreenState extends State<WorkerHistoryScreen> {
 
 class _HistoryTile extends StatelessWidget {
   final ContainerInspection inspection;
+  final VoidCallback onTap;
 
-  const _HistoryTile({required this.inspection});
+  const _HistoryTile({
+    required this.inspection,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF075DCC).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.inventory_2_outlined,
+                  color: Color(0xFF075DCC),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      inspection.containerNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF1A1A2E),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      inspection.bookingNumber,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      inspection.formattedDate,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8EDF5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${inspection.photoCount} photos',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF075DCC),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              StatusBadge(status: inspection.status),
+            ],
+          ),
+        ),
       ),
-      child: Row(
+    );
+  }
+}
+
+class _EmptyHistoryState extends StatelessWidget {
+  const _EmptyHistoryState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xFF075DCC).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.inventory_2_outlined,
-              color: Color(0xFF075DCC),
+          Icon(
+            Icons.inventory_2_outlined,
+            size: 64,
+            color: Color(0xFFB0B7C3),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No inspections yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A2E),
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  inspection.containerNumber,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${inspection.portName} - ${inspection.photoCount} photos - ${inspection.formattedDate}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+          SizedBox(height: 6),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Submit your first inspection to see it here',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF667085),
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          StatusBadge(status: inspection.status),
         ],
       ),
     );

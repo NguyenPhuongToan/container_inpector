@@ -5,6 +5,34 @@ enum InspectionStatus {
   rejected,
 }
 
+class InspectionImage {
+  final int angle;
+  final String label;
+  final String url;
+
+  const InspectionImage({
+    required this.angle,
+    required this.label,
+    required this.url,
+  });
+
+  factory InspectionImage.fromJson(Map<String, dynamic> json) {
+    return InspectionImage(
+      angle: int.tryParse(json['angle']?.toString() ?? '') ?? 0,
+      label: json['label']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'angle': angle,
+      'label': label,
+      'url': url,
+    };
+  }
+}
+
 class ContainerInspection {
   final String id;
   final String containerNumber;
@@ -15,7 +43,9 @@ class ContainerInspection {
   final String notes;
   final InspectionStatus status;
   final DateTime createdAt;
+  final DateTime updatedAt;
   final List<String> imageUrls;
+  final List<InspectionImage> images;
 
   const ContainerInspection({
     required this.id,
@@ -27,7 +57,9 @@ class ContainerInspection {
     required this.notes,
     required this.status,
     required this.createdAt,
+    required this.updatedAt,
     required this.imageUrls,
+    required this.images,
   });
 
   factory ContainerInspection.fromJson(Map<String, dynamic> json) {
@@ -43,11 +75,17 @@ class ContainerInspection {
         (status) => status.name == json['status']?.toString().toLowerCase(),
         orElse: () => InspectionStatus.submitted,
       ),
-      createdAt: DateTime.tryParse(
-            json['created_at']?.toString() ?? '',
-          ) ??
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
-      imageUrls: List<String>.from(json['image_urls'] ?? []),
+      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+          DateTime.now(),
+      imageUrls: (json['image_urls'] as List? ?? [])
+          .map((item) => item.toString())
+          .toList(),
+      images: (json['images'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(InspectionImage.fromJson)
+          .toList(),
     );
   }
 
@@ -62,7 +100,9 @@ class ContainerInspection {
       'notes': notes,
       'status': status.name,
       'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
       'image_urls': imageUrls,
+      'images': images.map((image) => image.toJson()).toList(),
     };
   }
 
@@ -72,7 +112,11 @@ class ContainerInspection {
     return '$day/$month/${createdAt.year}';
   }
 
-  String? get thumbnail => imageUrls.isNotEmpty ? imageUrls.first : null;
+  int get photoCount => images.isNotEmpty ? images.length : imageUrls.length;
 
-  int get photoCount => imageUrls.length;
+  String? get thumbnail {
+    if (images.isNotEmpty) return images.first.url;
+    if (imageUrls.isNotEmpty) return imageUrls.first;
+    return null;
+  }
 }

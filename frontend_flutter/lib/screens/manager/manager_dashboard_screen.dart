@@ -1,7 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 
 import '../../models/inspection.dart';
 import '../../services/api_service.dart';
+import '../../widgets/inspection_card_skeleton.dart';
 import '../../widgets/status_badge.dart';
 import 'manager_review_screen.dart';
 
@@ -18,16 +21,25 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   final _workerController = TextEditingController();
   final _portController = TextEditingController();
   String _status = 'submitted';
+  int _pendingCount = 0;
+  int _lastKnownPendingCount = 0;
+  Timer? _pollingTimer;
   late Future<List<ContainerInspection>> inspectionsFuture;
 
   @override
   void initState() {
     super.initState();
     inspectionsFuture = _loadInspections();
+    _loadPendingCount();
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _loadPendingCount(),
+    );
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _containerController.dispose();
     _workerController.dispose();
     _portController.dispose();
@@ -47,7 +59,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     setState(() {
       inspectionsFuture = _loadInspections();
     });
-
+    await _loadPendingCount();
     await inspectionsFuture;
   }
 
@@ -58,12 +70,76 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     });
   }
 
+  void _filterByStatus(String status) => _setStatus(status);
+
+  Future<void> _loadPendingCount() async {
+    try {
+      final list = await _apiService.getInspections(status: 'submitted');
+      final newCount = list.length;
+      if (!mounted) return;
+
+      if (newCount > _lastKnownPendingCount && _lastKnownPendingCount != 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${newCount - _lastKnownPendingCount} new inspection(s) waiting for review',
+            ),
+            backgroundColor: const Color(0xFF075DCC),
+            action: SnackBarAction(
+              label: 'Review',
+              textColor: Colors.white,
+              onPressed: () => _filterByStatus('submitted'),
+            ),
+          ),
+        );
+      }
+
+      setState(() {
+        _pendingCount = newCount;
+        _lastKnownPendingCount = newCount;
+      });
+    } catch (_) {
+      return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manager Review'),
         actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_rounded),
+                onPressed: () => _filterByStatus('submitted'),
+              ),
+              if (_pendingCount > 0)
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        _pendingCount > 99 ? '99+' : '$_pendingCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             onPressed: refresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -91,7 +167,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
               future: inspectionsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: 6,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, __) => const InspectionCardSkeleton(),
+                  );
                 }
 
                 if (snapshot.hasError) {
@@ -106,12 +187,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 final inspections = snapshot.data ?? [];
 
                 if (inspections.isEmpty) {
-                  return _MessageState(
-                    icon: Icons.inbox_rounded,
-                    title: 'No inspections found',
-                    message:
-                        'Worker submissions matching these filters will appear here.',
-                    onRetry: refresh,
+                  return RefreshIndicator(
+                    onRefresh: refresh,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 160),
+                        _EmptyDashboardState(),
+                      ],
+                    ),
                   );
                 }
 
@@ -393,6 +477,42 @@ class _FilterField extends StatelessWidget {
         labelText: label,
         prefixIcon: Icon(icon),
         border: const OutlineInputBorder(),
+      ),
+    );
+  }
+}
+
+class _EmptyDashboardState extends StatelessWidget {
+  const _EmptyDashboardState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 64,
+            color: Color(0xFFB0B7C3),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'No inspections found',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'All caught up!',
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF667085),
+            ),
+          ),
+        ],
       ),
     );
   }
