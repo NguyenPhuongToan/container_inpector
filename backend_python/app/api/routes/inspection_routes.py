@@ -5,16 +5,13 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from docx import Document
-from docx.shared import Inches
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.api.dependencies import get_current_user, require_roles
+from app.core.constants import OCR_TEMP_ROOT, PHOTO_LABELS as SHARED_PHOTO_LABELS, REPORT_ROOT, UPLOAD_ROOT
 from app.database.db import get_db
 from app.database.models import ExportRecord, Inspection, InspectionImage, User
 from app.schemas.inspection_schema import (
@@ -23,44 +20,17 @@ from app.schemas.inspection_schema import (
     ScanContainerIdResponse,
 )
 from app.services.ai.container_ocr import ContainerOcrError, detect_container_number
+from app.services.excel.excel_exporter import ExcelExportError, generate_excel
+from app.services.excel.template_manager import WordReportError, generate_word_report
 from app.services.notification.email_service import (
     EmailConfigurationError,
     send_email_with_attachment,
 )
+from app.services.storage.image_storage import save_upload, validate_image
 
 router = APIRouter(tags=["inspections"])
 
-UPLOAD_ROOT = Path("uploads/inspections")
-REPORT_ROOT = Path("reports")
-OCR_TEMP_ROOT = Path("tmp/ocr_scans")
-
-PHOTO_LABELS = [
-    "Container Number",
-    "Front",
-    "Rear",
-    "Left Side",
-    "Right Side",
-    "Front Left",
-    "Front Right",
-    "Rear Left",
-    "Rear Right",
-    "Ceiling",
-    "Floor",
-    "Door",
-    "Lock",
-    "CSC Plate",
-]
-
-CONTAINER_NUMBER_PATTERN = re.compile(r"[A-Z]{4}\d{7}")
-MAX_IMAGE_SIZE = 10 * 1024 * 1024
-ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-ALLOWED_IMAGE_CONTENT_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/octet-stream",
-}
-CHUNK_SIZE = 1024 * 1024
+PHOTO_LABELS = list(SHARED_PHOTO_LABELS)
 
 
 def _ensure_storage() -> None:
@@ -111,59 +81,8 @@ def _find_inspection(db: Session, inspection_id: str) -> Inspection:
     raise HTTPException(status_code=404, detail="Inspection not found")
 
 
-def _inspection_report_dir(inspection_id: str) -> Path:
-    report_dir = REPORT_ROOT / inspection_id
-    report_dir.mkdir(parents=True, exist_ok=True)
-    return report_dir
-
-
-def _safe_file_suffix(filename: str | None) -> str:
-    suffix = Path(filename or "").suffix.lower()
-    if suffix in ALLOWED_IMAGE_SUFFIXES:
-        return suffix
-    raise HTTPException(
-        status_code=400,
-        detail=f"Unsupported image file type: {suffix or 'unknown'}",
-    )
-
-
 def _safe_label(label: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", label.lower()).strip("_")
-
-
-def _validate_image_upload(image: UploadFile) -> str:
-    suffix = _safe_file_suffix(image.filename)
-    content_type = (image.content_type or "").lower()
-
-    if content_type and content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported image content type: {content_type}",
-        )
-
-    return suffix
-
-
-async def _save_validated_upload(image: UploadFile, file_path: Path) -> None:
-    total_size = 0
-
-    with file_path.open("wb") as buffer:
-        while chunk := await image.read(CHUNK_SIZE):
-            total_size += len(chunk)
-
-            if total_size > MAX_IMAGE_SIZE:
-                buffer.close()
-                file_path.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=413,
-                    detail="Image is too large. Maximum size is 10MB.",
-                )
-
-            buffer.write(chunk)
-
-    if total_size == 0:
-        file_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Uploaded image is empty")
 
 
 async def _extract_inspection_images(request: Request) -> list[UploadFile]:
@@ -243,12 +162,12 @@ async def create_inspection(
     image_records: list[dict[str, Any]] = []
 
     for index, image in enumerate(images):
-        suffix = _validate_image_upload(image)
+        suffix = validate_image(image)
         safe_label = _safe_label(PHOTO_LABELS[index])
         filename = f"{index + 1:02d}_{safe_label}{suffix}"
         file_path = inspection_dir / filename
 
-        await _save_validated_upload(image, file_path)
+        await run_in_threadpool(save_upload, image, file_path)
 
         relative_path = f"uploads/inspections/{inspection_id}/{filename}"
         image_urls.append(_public_url(request, relative_path))
@@ -339,6 +258,7 @@ async def accept_inspection(
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
     inspection = _find_inspection(db, inspection_id)
+    _ensure_submitted(inspection)
     inspection.status = "accepted"
     inspection.accepted_by_id = current_user.id
     inspection.updated_at = datetime.now(timezone.utc)
@@ -358,6 +278,7 @@ async def reject_inspection(
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
     inspection = _find_inspection(db, inspection_id)
+    _ensure_submitted(inspection)
     inspection.status = "rejected"
     inspection.rejected_by_id = current_user.id
     inspection.updated_at = datetime.now(timezone.utc)
@@ -372,6 +293,14 @@ def _ensure_accepted(inspection: Inspection) -> None:
         raise HTTPException(
             status_code=400,
             detail="Only accepted inspections can be exported",
+        )
+
+
+def _ensure_submitted(inspection: Inspection) -> None:
+    if inspection.status != "submitted":
+        raise HTTPException(
+            status_code=400,
+            detail="Only submitted inspections can be accepted or rejected",
         )
 
 
@@ -402,130 +331,6 @@ def _email_attachment(
         return False, None, f"Email sending failed: {exc}"
 
     return bool(result["sent"]), str(result["to"]), "Email sent successfully."
-
-
-def _image_path(image: dict[str, Any]) -> Path | None:
-    path = image.get("path")
-    if not path:
-        return None
-
-    image_path = Path(path)
-    if image_path.exists() and image_path.suffix.lower() in {".jpg", ".jpeg", ".png"}:
-        return image_path
-
-    return None
-
-
-def _inspection_to_export_dict(inspection: Inspection) -> dict[str, Any]:
-    data = _inspection_to_dict(inspection)
-    image_paths = {
-        image.angle: image.path
-        for image in inspection.images
-    }
-
-    for image in data["images"]:
-        image["path"] = image_paths.get(image["angle"], "")
-
-    return data
-
-
-def _create_excel_report(inspection: Inspection) -> Path:
-    inspection_data = _inspection_to_dict(inspection)
-    report_dir = _inspection_report_dir(inspection.id)
-    report_path = report_dir / f"inspection_{inspection.id}_excel.xlsx"
-
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Inspection"
-    sheet.column_dimensions["A"].width = 22
-    sheet.column_dimensions["B"].width = 44
-    sheet.column_dimensions["C"].width = 16
-    sheet.column_dimensions["D"].width = 26
-
-    title_fill = PatternFill("solid", fgColor="075DCC")
-    sheet["A1"] = "Container Inspection Report"
-    sheet["A1"].font = Font(bold=True, color="FFFFFF", size=16)
-    sheet["A1"].fill = title_fill
-    sheet.merge_cells("A1:D1")
-
-    rows = [
-        ("Container Number", inspection_data["container_number"]),
-        ("Booking Number", inspection_data["booking_number"]),
-        ("Truck Number", inspection_data["truck_number"]),
-        ("Worker", inspection_data["worker_name"]),
-        ("Port / Location", inspection_data["port_name"]),
-        ("Status", inspection_data["status"]),
-        ("Submitted At", inspection_data["created_at"]),
-        ("Notes", inspection_data.get("notes", "")),
-    ]
-
-    for row_index, (label, value) in enumerate(rows, start=3):
-        sheet.cell(row=row_index, column=1, value=label).font = Font(bold=True)
-        sheet.cell(row=row_index, column=2, value=value)
-
-    start_row = 13
-    headers = ["Angle", "Label", "Image URL", "Saved File"]
-    for column, header in enumerate(headers, start=1):
-        cell = sheet.cell(row=start_row, column=column, value=header)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = title_fill
-
-    export_data = _inspection_to_export_dict(inspection)
-    for offset, image in enumerate(export_data.get("images", []), start=1):
-        row = start_row + offset
-        sheet.cell(row=row, column=1, value=image["angle"])
-        sheet.cell(row=row, column=2, value=image["label"])
-        sheet.cell(row=row, column=3, value=image["url"])
-        sheet.cell(row=row, column=4, value=image.get("path", ""))
-
-    workbook.save(report_path)
-    return report_path
-
-
-def _create_photo_report(inspection: Inspection) -> Path:
-    inspection_data = _inspection_to_export_dict(inspection)
-    report_dir = _inspection_report_dir(inspection.id)
-    report_path = report_dir / f"inspection_{inspection.id}_photo_report.docx"
-
-    document = Document()
-    document.add_heading("Container Inspection Photo Report", level=1)
-
-    info_table = document.add_table(rows=0, cols=2)
-    info_rows = [
-        ("Container Number", inspection_data["container_number"]),
-        ("Booking Number", inspection_data["booking_number"]),
-        ("Truck Number", inspection_data["truck_number"]),
-        ("Worker", inspection_data["worker_name"]),
-        ("Port / Location", inspection_data["port_name"]),
-        ("Status", inspection_data["status"]),
-        ("Submitted At", inspection_data["created_at"]),
-        ("Notes", inspection_data.get("notes", "")),
-    ]
-
-    for label, value in info_rows:
-        row = info_table.add_row()
-        row.cells[0].text = label
-        row.cells[1].text = value
-
-    document.add_heading("Photo Evidence", level=2)
-
-    for image in inspection_data.get("images", []):
-        document.add_paragraph(
-            f"{image['angle']:02d}. {image['label']}",
-            style="Heading 3",
-        )
-        image_path = _image_path(image)
-        if image_path is None:
-            document.add_paragraph(image["url"])
-            continue
-
-        try:
-            document.add_picture(str(image_path), width=Inches(5.8))
-        except Exception:
-            document.add_paragraph(image["url"])
-
-    document.save(report_path)
-    return report_path
 
 
 def _export_response(
@@ -582,7 +387,11 @@ async def export_excel_and_email(
     _ensure_accepted(inspection)
     _ensure_storage()
 
-    report_path = _create_excel_report(inspection)
+    try:
+        report_path = generate_excel(inspection)
+    except ExcelExportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     return _export_response(
         request=request,
         inspection=inspection,
@@ -607,7 +416,11 @@ async def generate_report_and_email(
     _ensure_accepted(inspection)
     _ensure_storage()
 
-    report_path = _create_photo_report(inspection)
+    try:
+        report_path = generate_word_report(inspection, request)
+    except WordReportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
     return _export_response(
         request=request,
         inspection=inspection,
@@ -636,11 +449,11 @@ async def scan_container_id(
     image: UploadFile = File(...),
     current_user: User = Depends(require_roles("worker", "admin")),
 ):
-    suffix = _validate_image_upload(image)
+    suffix = validate_image(image)
     _ensure_storage()
 
     temp_path = OCR_TEMP_ROOT / f"{uuid4()}{suffix}"
-    await _save_validated_upload(image, temp_path)
+    await run_in_threadpool(save_upload, image, temp_path)
 
     try:
         container_number = await run_in_threadpool(detect_container_number, temp_path)

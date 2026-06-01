@@ -52,13 +52,8 @@ The FastAPI backend handles:
 - Manager: review, accept/reject, export accepted inspections.
 - Admin: both worker and manager capabilities.
 
-## Future Refactor Direction
+## Service Layout
 
-Several service folders already exist. A clean next step is to move large logic
-out of `inspection_routes.py` into focused services:
-
-- image storage
-- Excel export
-- Word report generation
-- email notification
-- cleanup workers
+Inspection routes delegate file storage, Excel export, Word report generation,
+OCR fallback, cleanup, and background export work to focused service/worker
+modules under `backend_python/app/services` and `backend_python/app/workers`.

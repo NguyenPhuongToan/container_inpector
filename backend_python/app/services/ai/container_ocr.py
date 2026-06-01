@@ -6,6 +6,11 @@ from typing import Any
 
 from paddleocr import PaddleOCR
 
+from app.core.config import settings
+from app.services.ai.gemini_service import (
+    GeminiServiceError,
+    extract_container_number_with_gemini,
+)
 
 CONTAINER_NUMBER_PATTERN = re.compile(r"[A-Z]{4}\d{7}")
 OCR_CANDIDATE_PATTERN = re.compile(r"[A-Z0-9]{4}\d{7}")
@@ -66,7 +71,7 @@ _OCR_LOCK = Lock()
 
 
 class ContainerOcrError(RuntimeError):
-    pass
+    """Raised when all OCR providers fail to return a container number."""
 
 
 @lru_cache(maxsize=1)
@@ -181,13 +186,24 @@ def _find_best_container_number(texts: list[tuple[str, float]]) -> str | None:
 
 
 def detect_container_number(image_path: Path) -> str:
-    with _OCR_LOCK:
-        result = _get_ocr().predict(str(image_path))
+    container_number: str | None = None
 
-    recognized_texts = _extract_recognized_texts(result)
-    container_number = _find_best_container_number(recognized_texts)
+    try:
+        with _OCR_LOCK:
+            result = _get_ocr().predict(str(image_path))
+        recognized_texts = _extract_recognized_texts(result)
+        container_number = _find_best_container_number(recognized_texts)
+    except Exception:
+        container_number = None
 
-    if container_number is None:
-        raise ContainerOcrError("Container number could not be detected")
+    if container_number is not None:
+        return container_number
 
-    return container_number
+    gemini_error: GeminiServiceError | None = None
+    if settings.gemini_configured:
+        try:
+            return extract_container_number_with_gemini(image_path)
+        except GeminiServiceError as exc:
+            gemini_error = exc
+
+    raise ContainerOcrError("Container number could not be detected") from gemini_error

@@ -22,3 +22,7 @@ python-docx==1.2.0
 numpy==2.3.5
 paddlepaddle==3.2.2
 paddleocr==3.6.0
+pytest==8.4.2
+httpx==0.28.1
+slowapi==0.1.9
+google-generativeai==0.8.5

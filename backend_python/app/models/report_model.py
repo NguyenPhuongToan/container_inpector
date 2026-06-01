@@ -1,4 +1,4 @@
-"""Domain model placeholder for report business objects.
+from app.database.models import ExportRecord
 
-Generated export records currently use the SQLAlchemy `ExportRecord` model.
-"""
+
+__all__ = ["ExportRecord"]

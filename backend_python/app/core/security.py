@@ -34,8 +34,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     if algorithm != "pbkdf2_sha256":
         return False
 
-    salt = _b64url_decode(salt_b64)
-    expected = _b64url_decode(digest_b64)
+    try:
+        salt = _b64url_decode(salt_b64)
+        expected = _b64url_decode(digest_b64)
+    except Exception:
+        return False
+
     actual = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 120_000)
     return hmac.compare_digest(actual, expected)
 
@@ -76,10 +80,15 @@ def decode_access_token(token: str) -> dict:
         hashlib.sha256,
     ).digest()
 
-    if not hmac.compare_digest(_b64url_decode(encoded_signature), expected_signature):
+    try:
+        actual_signature = _b64url_decode(encoded_signature)
+        payload = json.loads(_b64url_decode(encoded_payload))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from exc
+
+    if not hmac.compare_digest(actual_signature, expected_signature):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    payload = json.loads(_b64url_decode(encoded_payload))
     if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 

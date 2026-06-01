@@ -151,8 +151,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--password",
-        default="worker123",
-        help="Worker login password. Default: worker123",
+        default="worker12345",
+        help="Worker login password. Default: worker12345",
     )
     args = parser.parse_args()
 

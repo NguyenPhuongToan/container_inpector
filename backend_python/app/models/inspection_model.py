@@ -1,4 +1,4 @@
-"""Domain model placeholder for inspection business objects.
+from app.database.models import Inspection, InspectionImage
 
-Database models currently live in `app.database.models`.
-"""
+
+__all__ = ["Inspection", "InspectionImage"]

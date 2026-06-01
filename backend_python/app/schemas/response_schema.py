@@ -1,4 +1,5 @@
-"""Shared API response schemas.
+from pydantic import BaseModel
 
-Route-specific response schemas currently live in their feature schema files.
-"""
+
+class MessageResponse(BaseModel):
+    message: str

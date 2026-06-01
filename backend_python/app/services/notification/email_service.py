@@ -1,12 +1,13 @@
 import smtplib
 from email.message import EmailMessage
 from pathlib import Path
+from uuid import uuid4
 
 from app.core.config import settings
 
 
 class EmailConfigurationError(RuntimeError):
-    pass
+    """Raised when no email recipient or delivery settings are available."""
 
 
 def send_email_with_attachment(
@@ -18,7 +19,7 @@ def send_email_with_attachment(
 ) -> dict[str, str | bool]:
     recipient = to_email or settings.manager_email
 
-    if not settings.email_configured:
+    if not recipient:
         raise EmailConfigurationError("SMTP email settings are not configured")
 
     if not attachment_path.exists():
@@ -37,6 +38,18 @@ def send_email_with_attachment(
         filename=attachment_path.name,
     )
 
+    if settings.email_delivery_mode == "outbox" or not settings.email_configured:
+        outbox_dir = Path(settings.email_outbox_dir)
+        outbox_dir.mkdir(parents=True, exist_ok=True)
+        outbox_path = outbox_dir / f"{uuid4()}.eml"
+        outbox_path.write_bytes(bytes(message))
+        return {
+            "sent": True,
+            "to": recipient,
+            "delivery": "outbox",
+            "path": str(outbox_path),
+        }
+
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
         if settings.smtp_use_tls:
             smtp.starttls()
@@ -46,4 +59,5 @@ def send_email_with_attachment(
     return {
         "sent": True,
         "to": recipient,
+        "delivery": "smtp",
     }

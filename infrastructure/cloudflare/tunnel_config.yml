@@ -1,0 +1,7 @@
+tunnel: container-inspection
+credentials-file: /etc/cloudflared/container-inspection.json
+
+ingress:
+  - hostname: container-inspection.example.com
+    service: http://localhost:80
+  - service: http_status:404

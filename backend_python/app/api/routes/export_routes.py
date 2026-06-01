@@ -1,5 +1,4 @@
-"""Reserved for dedicated export endpoints.
+from fastapi import APIRouter
 
-Export behavior currently lives in `inspection_routes.py` because reports are
-generated from accepted inspections.
-"""
+
+router = APIRouter(tags=["exports"])

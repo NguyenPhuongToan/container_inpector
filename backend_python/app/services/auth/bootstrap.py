@@ -1,33 +1,39 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.database.models import User
 
-DEFAULT_USERS = [
-    {
-        "email": "worker@example.com",
-        "full_name": "Default Worker",
-        "role": "worker",
-        "password": "worker123",
-    },
-    {
-        "email": "manager@example.com",
-        "full_name": "Default Manager",
-        "role": "manager",
-        "password": "manager123",
-    },
-    {
-        "email": "admin@example.com",
-        "full_name": "Default Admin",
-        "role": "admin",
-        "password": "admin123",
-    },
-]
+
+def _seed_users() -> list[dict[str, str]]:
+    if not settings.seed_demo_users:
+        return []
+
+    return [
+        {
+            "email": settings.demo_worker_email,
+            "full_name": "Default Worker",
+            "role": "worker",
+            "password": settings.demo_worker_password,
+        },
+        {
+            "email": settings.demo_manager_email,
+            "full_name": "Default Manager",
+            "role": "manager",
+            "password": settings.demo_manager_password,
+        },
+        {
+            "email": settings.demo_admin_email,
+            "full_name": "Default Admin",
+            "role": "admin",
+            "password": settings.demo_admin_password,
+        },
+    ]
 
 
 def seed_default_users(db: Session) -> None:
-    for user_data in DEFAULT_USERS:
+    for user_data in _seed_users():
         existing = db.scalar(
             select(User).where(User.email == user_data["email"].lower())
         )

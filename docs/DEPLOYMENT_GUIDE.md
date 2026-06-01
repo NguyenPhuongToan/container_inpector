@@ -23,6 +23,8 @@ Important values:
 - `SMTP_PASSWORD`
 - `SMTP_FROM`
 - `SMTP_USE_TLS`
+- `EMAIL_DELIVERY_MODE`
+- `EMAIL_OUTBOX_DIR`
 
 ## Local Backend
 
@@ -43,6 +45,5 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
 - Replace demo/default users with a controlled admin bootstrap.
 - Require a real `JWT_SECRET`.
 - Restrict CORS origins.
-- Secure or remove the raw `/upload` route.
 - Add database migrations.
 - Add backup and restore procedures.

@@ -73,9 +73,10 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
   inspections.
 - `admin` - can access both worker and manager workflows.
 
-## Notes
+## Local Test Accounts
 
-Some backend files are intentionally marked as placeholders. They exist because
-the project was scaffolded for a service-based architecture, while some logic is
-currently implemented directly in route files. Keeping those placeholders
-documented makes future refactors safer.
+When `SEED_DEMO_USERS=true`, the backend creates these accounts at startup:
+
+- `worker@example.com / worker12345`
+- `manager@example.com / manager12345`
+- `admin@example.com / admin12345`

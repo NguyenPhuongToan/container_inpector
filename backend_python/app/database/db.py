@@ -7,7 +7,7 @@ from app.core.config import settings
 
 
 class Base(DeclarativeBase):
-    pass
+    __abstract__ = True
 
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)

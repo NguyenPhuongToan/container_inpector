@@ -1,4 +1,4 @@
-"""Domain model placeholder for user business objects.
+from app.database.models import User
 
-Database user records currently live in `app.database.models`.
-"""
+
+__all__ = ["User"]

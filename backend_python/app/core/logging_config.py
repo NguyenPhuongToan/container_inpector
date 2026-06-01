@@ -1,5 +1,8 @@
-"""Logging configuration placeholder.
+import logging
 
-Central logging setup can be added here when the backend moves beyond default
-Uvicorn/FastAPI logging.
-"""
+
+def configure_logging(level: int = logging.INFO) -> None:
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
