@@ -37,6 +37,7 @@ def _inspection_to_export_dict(inspection: Inspection) -> dict[str, Any]:
     ]
     return {
         "container_number": inspection.container_number,
+        "flexitank_number": inspection.flexitank_number or "",
         "booking_number": inspection.booking_number,
         "truck_number": inspection.truck_number,
         "worker_name": inspection.worker_name,
@@ -65,6 +66,7 @@ def generate_word_report(inspection: Inspection, request: Request) -> Path:
         info_table = document.add_table(rows=0, cols=2)
         info_rows = [
             ("Container Number", inspection_data["container_number"]),
+            ("Flexitank Number", inspection_data["flexitank_number"]),
             ("Booking Number", inspection_data["booking_number"]),
             ("Truck Number", inspection_data["truck_number"]),
             ("Worker", inspection_data["worker_name"]),

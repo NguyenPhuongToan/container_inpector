@@ -2,7 +2,8 @@ from pathlib import Path
 
 
 PHOTO_LABELS = [
-    "Container Number",
+    "Container Door Number",
+    "Flexitank Serial Number",
     "Front",
     "Rear",
     "Left Side",
@@ -13,9 +14,6 @@ PHOTO_LABELS = [
     "Rear Right",
     "Ceiling",
     "Floor",
-    "Door",
-    "Lock",
-    "CSC Plate",
 ]
 
 UPLOAD_ROOT = Path("uploads/inspections")

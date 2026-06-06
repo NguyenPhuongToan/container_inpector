@@ -167,7 +167,8 @@ class _EmptyImagePreview extends StatelessWidget {
   IconData _iconForSlot(String title) {
     if (title == 'Lock') return Icons.lock_rounded;
     if (title == 'CSC Plate') return Icons.badge_rounded;
-    if (title == 'Container Number') return Icons.pin_rounded;
+    if (title == 'Container Door Number') return Icons.pin_rounded;
+    if (title == 'Flexitank Serial Number') return Icons.qr_code_2_rounded;
     if (title == 'Ceiling') {
       return Icons.vertical_align_top_rounded;
     }

@@ -12,6 +12,7 @@ class InspectionImageResponse(BaseModel):
 class InspectionResponse(BaseModel):
     id: str
     container_number: str
+    flexitank_number: str = ""
     booking_number: str
     truck_number: str
     worker_name: str
@@ -35,5 +36,13 @@ class ExportEmailResponse(BaseModel):
     filename: str | None = None
 
 
+class FittingPhotoExportRequest(BaseModel):
+    inspection_ids: list[str] = Field(min_length=1, max_length=5)
+
+
 class ScanContainerIdResponse(BaseModel):
     container_number: str
+
+
+class ScanFlexitankIdResponse(BaseModel):
+    flexitank_number: str

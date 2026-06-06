@@ -7,7 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 PHOTO_LABELS = [
-    "Container Number",
+    "Container Door Number",
+    "Flexitank Serial Number",
     "Front",
     "Rear",
     "Left Side",
@@ -18,9 +19,6 @@ PHOTO_LABELS = [
     "Rear Right",
     "Ceiling",
     "Floor",
-    "Door",
-    "Lock",
-    "CSC Plate",
 ]
 
 
@@ -45,6 +43,7 @@ def create_images(output_dir: Path) -> None:
         draw.line((450, 150, 450, 560), fill=(58, 35, 25), width=5)
         draw.text((210, 270), "TCLU", fill="white", font=font)
         draw.text((210, 325), "123456 5", fill="white", font=font)
+        draw.text((210, 380), "23TT3-2601-005", fill="white", font=small_font)
         draw.text((210, 405), "TEST IMAGE", fill=(245, 245, 245), font=small_font)
 
         filename = f"{index + 1:02d}_{label.lower().replace(' ', '_')}.jpg"
@@ -52,7 +51,7 @@ def create_images(output_dir: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create 14 test inspection images.")
+    parser = argparse.ArgumentParser(description="Create 12 test inspection images.")
     parser.add_argument(
         "--output-dir",
         default=Path("tmp/test_inspection_images"),

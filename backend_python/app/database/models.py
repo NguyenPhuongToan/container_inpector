@@ -37,6 +37,7 @@ class Inspection(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     container_number: Mapped[str] = mapped_column(String(32), index=True)
+    flexitank_number: Mapped[str] = mapped_column(String(128), default="")
     booking_number: Mapped[str] = mapped_column(String(128))
     truck_number: Mapped[str] = mapped_column(String(128))
     worker_name: Mapped[str] = mapped_column(String(255))

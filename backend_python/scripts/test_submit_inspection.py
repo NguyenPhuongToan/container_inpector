@@ -8,7 +8,8 @@ from urllib import error, request
 
 
 PHOTO_LABELS = [
-    "Container Number",
+    "Container Door Number",
+    "Flexitank Serial Number",
     "Front",
     "Rear",
     "Left Side",
@@ -19,9 +20,6 @@ PHOTO_LABELS = [
     "Rear Right",
     "Ceiling",
     "Floor",
-    "Door",
-    "Lock",
-    "CSC Plate",
 ]
 
 
@@ -98,6 +96,7 @@ def submit_inspection(base_url: str, image_dir: Path, token: str) -> None:
     boundary = "----container-inspection-test-boundary"
     fields = {
         "container_number": "TCLU1234565",
+        "flexitank_number": "23TT3-2601-005",
         "booking_number": "BOOKING-TEST-001",
         "truck_number": "TRUCK-TEST-001",
         "worker_name": "Test Worker",
@@ -131,7 +130,7 @@ def submit_inspection(base_url: str, image_dir: Path, token: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Submit a test inspection with 14 indexed image files."
+        description="Submit a test inspection with 12 indexed image files."
     )
     parser.add_argument(
         "--base-url",
@@ -142,7 +141,7 @@ def main() -> None:
         "--image-dir",
         required=True,
         type=Path,
-        help="Folder containing exactly 14 jpg/png/webp images.",
+        help="Folder containing exactly 12 jpg/png/webp images.",
     )
     parser.add_argument(
         "--email",

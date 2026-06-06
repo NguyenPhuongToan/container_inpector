@@ -19,9 +19,12 @@ backend_python/exports/
 backend_python/logs/
 backend_python/tmp/
 backend_python/data/*.db
+outputs/
 
 # Flutter / Dart
 frontend_flutter/.dart_tool/
+.dart_appdata/
+.dart_tool_home/
 frontend_flutter/.flutter-plugins
 frontend_flutter/.flutter-plugins-dependencies
 frontend_flutter/build/

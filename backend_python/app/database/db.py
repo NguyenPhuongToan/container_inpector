@@ -1,6 +1,7 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
@@ -26,3 +27,19 @@ def init_db() -> None:
     from app.database import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _ensure_lightweight_migrations()
+
+
+def _ensure_lightweight_migrations() -> None:
+    inspector = inspect(engine)
+    if "inspections" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("inspections")}
+    if "flexitank_number" in columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE inspections ADD COLUMN flexitank_number VARCHAR(128) DEFAULT ''")
+        )

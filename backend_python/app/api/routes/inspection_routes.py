@@ -16,15 +16,26 @@ from app.database.db import get_db
 from app.database.models import ExportRecord, Inspection, InspectionImage, User
 from app.schemas.inspection_schema import (
     ExportEmailResponse,
+    FittingPhotoExportRequest,
     InspectionResponse,
     ScanContainerIdResponse,
+    ScanFlexitankIdResponse,
 )
-from app.services.ai.container_ocr import ContainerOcrError, detect_container_number
+from app.services.ai.container_ocr import (
+    ContainerOcrError,
+    FlexitankOcrError,
+    detect_container_number,
+    detect_flexitank_number,
+)
 from app.services.excel.excel_exporter import ExcelExportError, generate_excel
 from app.services.excel.template_manager import WordReportError, generate_word_report
 from app.services.notification.email_service import (
     EmailConfigurationError,
     send_email_with_attachment,
+)
+from app.services.presentation.fitting_photo_exporter import (
+    FittingPhotoExportError,
+    generate_fitting_photo_pptx,
 )
 from app.services.storage.image_storage import save_upload, validate_image
 
@@ -55,6 +66,7 @@ def _inspection_to_dict(inspection: Inspection) -> dict[str, Any]:
     return {
         "id": inspection.id,
         "container_number": inspection.container_number,
+        "flexitank_number": inspection.flexitank_number or "",
         "booking_number": inspection.booking_number,
         "truck_number": inspection.truck_number,
         "worker_name": inspection.worker_name,
@@ -136,6 +148,7 @@ async def _extract_inspection_images(request: Request) -> list[UploadFile]:
 async def create_inspection(
     request: Request,
     container_number: str = Form(...),
+    flexitank_number: str = Form(""),
     booking_number: str = Form(...),
     truck_number: str = Form(...),
     worker_name: str = Form(...),
@@ -183,6 +196,7 @@ async def create_inspection(
     inspection = Inspection(
         id=inspection_id,
         container_number=container_number.strip().upper(),
+        flexitank_number=flexitank_number.strip().upper(),
         booking_number=booking_number.strip(),
         truck_number=truck_number.strip(),
         worker_name=worker_name.strip() or current_user.full_name,
@@ -296,6 +310,63 @@ def _ensure_accepted(inspection: Inspection) -> None:
         )
 
 
+def _report_url_for_path(request: Request, report_path: Path) -> str:
+    try:
+        relative_path = report_path.relative_to(REPORT_ROOT)
+    except ValueError:
+        relative_path = Path(report_path.name)
+    return _public_url(request, f"reports/{relative_path.as_posix()}")
+
+
+def _find_accepted_booking_group(db: Session, inspection: Inspection) -> list[Inspection]:
+    group = db.scalars(
+        select(Inspection)
+        .options(selectinload(Inspection.images))
+        .where(Inspection.booking_number == inspection.booking_number)
+        .where(Inspection.status == "accepted")
+        .order_by(Inspection.created_at.asc())
+    ).all()
+
+    return list(group)
+
+
+def _find_selected_accepted_inspections(
+    db: Session,
+    inspection_ids: list[str],
+) -> list[Inspection]:
+    unique_ids = list(dict.fromkeys(inspection_ids))
+    inspections = db.scalars(
+        select(Inspection)
+        .options(selectinload(Inspection.images))
+        .where(Inspection.id.in_(unique_ids))
+    ).all()
+    inspections_by_id = {inspection.id: inspection for inspection in inspections}
+
+    missing_ids = [
+        inspection_id
+        for inspection_id in unique_ids
+        if inspection_id not in inspections_by_id
+    ]
+    if missing_ids:
+        raise HTTPException(status_code=404, detail="One or more inspections were not found")
+
+    selected = [inspections_by_id[inspection_id] for inspection_id in unique_ids]
+    for inspection in selected:
+        _ensure_accepted(inspection)
+
+    booking_numbers = {
+        inspection.booking_number.strip().lower()
+        for inspection in selected
+    }
+    if len(booking_numbers) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Selected inspections must share the same booking number",
+        )
+
+    return selected
+
+
 def _ensure_submitted(inspection: Inspection) -> None:
     if inspection.status != "submitted":
         raise HTTPException(
@@ -314,6 +385,7 @@ def _email_attachment(
     body = (
         "Please find the attached container inspection file.\n\n"
         f"Container Number: {inspection['container_number']}\n"
+        f"Flexitank Number: {inspection['flexitank_number']}\n"
         f"Booking Number: {inspection['booking_number']}\n"
         f"Truck Number: {inspection['truck_number']}\n"
         f"Status: {inspection['status']}\n"
@@ -366,6 +438,49 @@ def _export_response(
     return {
         "status": "exported",
         "message": f"{export_label} generated. {email_message}",
+        "report_url": report_url,
+        "email_sent": email_sent,
+        "email_to": email_to,
+        "filename": report_path.name,
+    }
+
+
+def _fitting_photo_export_response(
+    *,
+    request: Request,
+    booking_group: list[Inspection],
+    report_path: Path,
+    db: Session,
+) -> dict[str, Any]:
+    primary_inspection = booking_group[0]
+    inspection_data = _inspection_to_dict(primary_inspection)
+    email_sent, email_to, email_message = _email_attachment(
+        inspection=inspection_data,
+        attachment_path=report_path,
+        export_label="Fitting photo PowerPoint",
+    )
+    report_url = _report_url_for_path(request, report_path)
+
+    for group_item in booking_group:
+        db.add(
+            ExportRecord(
+                inspection_id=group_item.id,
+                export_type="fitting_photo_pptx",
+                filename=report_path.name,
+                report_url=report_url,
+                email_sent=email_sent,
+                email_to=email_to,
+                message=email_message,
+            )
+        )
+    db.commit()
+
+    return {
+        "status": "exported",
+        "message": (
+            f"Fitting photo PowerPoint generated for booking "
+            f"{primary_inspection.booking_number} with {len(booking_group)} container(s). {email_message}"
+        ),
         "report_url": report_url,
         "email_sent": email_sent,
         "email_to": email_to,
@@ -432,6 +547,63 @@ async def generate_report_and_email(
 
 
 @router.post(
+    "/inspections/export-fitting-photo-email",
+    response_model=ExportEmailResponse,
+)
+async def export_selected_fitting_photos_and_email(
+    request: Request,
+    payload: FittingPhotoExportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("manager", "admin")),
+):
+    _ensure_storage()
+    booking_group = _find_selected_accepted_inspections(db, payload.inspection_ids)
+
+    try:
+        report_path = await run_in_threadpool(generate_fitting_photo_pptx, booking_group)
+    except FittingPhotoExportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return _fitting_photo_export_response(
+        request=request,
+        booking_group=booking_group,
+        report_path=report_path,
+        db=db,
+    )
+
+
+@router.post(
+    "/inspections/{inspection_id}/export-fitting-photo-email",
+    response_model=ExportEmailResponse,
+)
+async def export_fitting_photo_and_email(
+    request: Request,
+    inspection_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("manager", "admin")),
+):
+    inspection = _find_inspection(db, inspection_id)
+    _ensure_accepted(inspection)
+    _ensure_storage()
+
+    booking_group = _find_accepted_booking_group(db, inspection)
+    if not booking_group:
+        raise HTTPException(status_code=400, detail="No accepted inspections found for this booking")
+
+    try:
+        report_path = await run_in_threadpool(generate_fitting_photo_pptx, booking_group)
+    except FittingPhotoExportError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return _fitting_photo_export_response(
+        request=request,
+        booking_group=booking_group,
+        report_path=report_path,
+        db=db,
+    )
+
+
+@router.post(
     "/inspections/{inspection_id}/export-email",
     response_model=ExportEmailResponse,
 )
@@ -466,3 +638,27 @@ async def scan_container_id(
         temp_path.unlink(missing_ok=True)
 
     return {"container_number": container_number}
+
+
+@router.post("/ai/scan-flexitank-id", response_model=ScanFlexitankIdResponse)
+async def scan_flexitank_id(
+    image: UploadFile = File(...),
+    current_user: User = Depends(require_roles("worker", "admin")),
+):
+    suffix = validate_image(image)
+    _ensure_storage()
+
+    temp_path = OCR_TEMP_ROOT / f"{uuid4()}{suffix}"
+    await run_in_threadpool(save_upload, image, temp_path)
+
+    try:
+        flexitank_number = await run_in_threadpool(detect_flexitank_number, temp_path)
+    except FlexitankOcrError:
+        raise HTTPException(
+            status_code=422,
+            detail="Flexitank serial number could not be detected from this image",
+        )
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    return {"flexitank_number": flexitank_number}

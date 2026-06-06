@@ -17,7 +17,8 @@ Base path: `/api`
 
 - `POST /inspections`
   - Roles: `worker`, `admin`
-  - Creates an inspection with 14 required images.
+  - Creates an inspection with 12 required images.
+  - Stores `container_number`, `flexitank_number`, and `booking_number`.
 
 - `GET /inspections`
   - Roles: authenticated users
@@ -44,6 +45,10 @@ Base path: `/api`
   - Roles: `worker`, `admin`
   - Accepts one image and returns a detected container number.
 
+- `POST /ai/scan-flexitank-id`
+  - Roles: `worker`, `admin`
+  - Accepts one image and returns a detected flexitank serial number.
+
 ## Reports
 
 - `POST /inspections/{inspection_id}/export-excel-email`
@@ -55,3 +60,10 @@ Base path: `/api`
   - Roles: `manager`, `admin`
   - Requires accepted inspection.
   - Generates a Word photo report and attempts to email it.
+
+- `POST /inspections/{inspection_id}/export-fitting-photo-email`
+  - Roles: `manager`, `admin`
+  - Requires accepted inspection.
+  - Groups all accepted inspections with the same booking number.
+  - Generates a fitting photo PowerPoint from the company template and attempts
+    to email it.

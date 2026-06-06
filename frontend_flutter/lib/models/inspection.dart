@@ -36,6 +36,7 @@ class InspectionImage {
 class ContainerInspection {
   final String id;
   final String containerNumber;
+  final String flexitankNumber;
   final String bookingNumber;
   final String truckNumber;
   final String workerName;
@@ -50,6 +51,7 @@ class ContainerInspection {
   const ContainerInspection({
     required this.id,
     required this.containerNumber,
+    required this.flexitankNumber,
     required this.bookingNumber,
     required this.truckNumber,
     required this.workerName,
@@ -66,6 +68,7 @@ class ContainerInspection {
     return ContainerInspection(
       id: json['id']?.toString() ?? '',
       containerNumber: json['container_number']?.toString() ?? '',
+      flexitankNumber: json['flexitank_number']?.toString() ?? '',
       bookingNumber: json['booking_number']?.toString() ?? '',
       truckNumber: json['truck_number']?.toString() ?? '',
       workerName: json['worker_name']?.toString() ?? '',
@@ -93,6 +96,7 @@ class ContainerInspection {
     return {
       'id': id,
       'container_number': containerNumber,
+      'flexitank_number': flexitankNumber,
       'booking_number': bookingNumber,
       'truck_number': truckNumber,
       'worker_name': workerName,

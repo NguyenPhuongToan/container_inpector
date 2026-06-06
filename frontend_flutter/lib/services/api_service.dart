@@ -21,7 +21,7 @@ class ApiService {
     const env = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (env.isNotEmpty) return env;
     if (kIsWeb) return 'http://127.0.0.1:8000/api';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
+    if (Platform.isAndroid) return 'http://192.168.100.120:8000/api';
     return 'http://127.0.0.1:8000/api';
   }
 
@@ -111,6 +111,7 @@ class ApiService {
 
   Future<void> submitInspection({
     required String containerNumber,
+    required String flexitankNumber,
     required String bookingNumber,
     required String truckNumber,
     required String workerName,
@@ -126,6 +127,7 @@ class ApiService {
 
     request.fields.addAll({
       'container_number': containerNumber,
+      'flexitank_number': flexitankNumber,
       'booking_number': bookingNumber,
       'truck_number': truckNumber,
       'worker_name': workerName,
@@ -187,6 +189,41 @@ class ApiService {
     }
 
     return containerNumber;
+  }
+
+  Future<String> scanFlexitankId(XFile image) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/ai/scan-flexitank-id'),
+    );
+    request.headers.addAll(_jsonHeaders);
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'image',
+        await image.readAsBytes(),
+        filename: image.name,
+      ),
+    );
+
+    final streamedResponse = await request.send().timeout(
+          const Duration(seconds: 25),
+        );
+    final response = await http.Response.fromStream(streamedResponse);
+    _checkUnauthorized(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to scan flexitank ID: ${response.body}');
+    }
+
+    final Map<String, dynamic> data = jsonDecode(response.body);
+    final flexitankNumber = data['flexitank_number']?.toString().trim() ?? '';
+
+    if (flexitankNumber.isEmpty) {
+      throw Exception('Flexitank ID not found');
+    }
+
+    return flexitankNumber;
   }
 
   Future<List<ContainerInspection>> getInspections({
@@ -282,6 +319,21 @@ class ApiService {
     );
   }
 
+  Future<String> exportFittingPhotoAndEmail(String inspectionId) {
+    return _postActionMessage(
+      '$baseUrl/inspections/$inspectionId/export-fitting-photo-email',
+    );
+  }
+
+  Future<String> exportSelectedFittingPhotosAndEmail(
+    List<String> inspectionIds,
+  ) {
+    return _postActionMessage(
+      '$baseUrl/inspections/export-fitting-photo-email',
+      body: {'inspection_ids': inspectionIds},
+    );
+  }
+
   Future<void> _postAction(String url) async {
     final response = await http.post(
       Uri.parse(url),
@@ -294,10 +346,17 @@ class ApiService {
     }
   }
 
-  Future<String> _postActionMessage(String url) async {
+  Future<String> _postActionMessage(
+    String url, {
+    Map<String, dynamic>? body,
+  }) async {
     final response = await http.post(
       Uri.parse(url),
-      headers: _jsonHeaders,
+      headers: {
+        ..._jsonHeaders,
+        if (body != null) 'Content-Type': 'application/json',
+      },
+      body: body == null ? null : jsonEncode(body),
     );
     _checkUnauthorized(response);
 

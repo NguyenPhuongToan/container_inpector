@@ -6,11 +6,13 @@ frontend.
 ## What The App Does
 
 - Workers register or log in.
-- Workers submit container inspections with 14 required photos.
-- The first photo can be scanned for a container number using OCR.
+- Workers submit container setup inspections with 12 required photos.
+- The first two photos can be scanned for the container door number and
+  flexitank serial number using OCR, with AI fallback when configured.
 - Managers review submitted inspections.
 - Managers accept or reject inspections.
-- Accepted inspections can be exported to Excel or a Word photo report.
+- Accepted inspections can be exported to Excel, a Word photo report, or a
+  booking-grouped fitting photo PowerPoint.
 - Reports can be emailed when SMTP settings are configured.
 
 ## Main Folders

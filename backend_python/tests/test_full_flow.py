@@ -43,6 +43,11 @@ def _fresh_app(tmp_path, monkeypatch):
         "detect_container_number",
         lambda image_path: "TCLU1234565",
     )
+    monkeypatch.setattr(
+        inspection_routes,
+        "detect_flexitank_number",
+        lambda image_path: "23TT3-2601-005",
+    )
 
     return main.app
 
@@ -93,18 +98,27 @@ def test_worker_manager_admin_flow(tmp_path, monkeypatch):
         assert scan_response.status_code == 200, scan_response.text
         assert scan_response.json()["container_number"] == "TCLU1234565"
 
+        flexitank_scan_response = client.post(
+            "/api/ai/scan-flexitank-id",
+            headers=_headers(worker_token),
+            files={"image": ("flexitank.jpg", _image_bytes("flexitank"), "image/jpeg")},
+        )
+        assert flexitank_scan_response.status_code == 200, flexitank_scan_response.text
+        assert flexitank_scan_response.json()["flexitank_number"] == "23TT3-2601-005"
+
         files = [
             (
                 f"image_{index}",
                 (f"{index + 1:02d}.jpg", _image_bytes(str(index)), "image/jpeg"),
             )
-            for index in range(14)
+            for index in range(12)
         ]
         create_response = client.post(
             "/api/inspections",
             headers=_headers(worker_token),
             data={
                 "container_number": "TCLU1234565",
+                "flexitank_number": "23TT3-2601-005",
                 "booking_number": "BOOK-001",
                 "truck_number": "TRUCK-001",
                 "worker_name": "Flow Worker",
@@ -116,7 +130,8 @@ def test_worker_manager_admin_flow(tmp_path, monkeypatch):
         assert create_response.status_code == 201, create_response.text
         inspection = create_response.json()
         assert inspection["status"] == "submitted"
-        assert len(inspection["image_urls"]) == 14
+        assert inspection["flexitank_number"] == "23TT3-2601-005"
+        assert len(inspection["image_urls"]) == 12
         inspection_id = inspection["id"]
 
         manager_token = _login(client, "manager@example.com", "manager12345")
@@ -162,13 +177,14 @@ def test_worker_manager_admin_flow(tmp_path, monkeypatch):
                 f"image_{index}",
                 (f"admin_{index + 1:02d}.jpg", _image_bytes(str(index)), "image/jpeg"),
             )
-            for index in range(14)
+            for index in range(12)
         ]
         admin_create = client.post(
             "/api/inspections",
             headers=_headers(admin_token),
             data={
                 "container_number": "MSCU6639871",
+                "flexitank_number": "23TT3-2601-009",
                 "booking_number": "BOOK-ADMIN",
                 "truck_number": "TRUCK-ADMIN",
                 "worker_name": "Admin User",

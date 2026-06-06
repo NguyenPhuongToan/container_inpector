@@ -62,6 +62,10 @@ class Settings:
     email_delivery_mode: str = os.getenv("EMAIL_DELIVERY_MODE", "outbox").lower()
     email_outbox_dir: str = os.getenv("EMAIL_OUTBOX_DIR", "reports/email_outbox")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    fitting_photo_template_path: str = os.getenv(
+        "FITTING_PHOTO_TEMPLATE_PATH",
+        "templates/fitting_photo_template.pptx",
+    )
     cors_origins: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:

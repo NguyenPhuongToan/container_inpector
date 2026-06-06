@@ -10,10 +10,12 @@ from app.core.config import settings
 from app.services.ai.gemini_service import (
     GeminiServiceError,
     extract_container_number_with_gemini,
+    extract_flexitank_number_with_gemini,
 )
 
 CONTAINER_NUMBER_PATTERN = re.compile(r"[A-Z]{4}\d{7}")
 OCR_CANDIDATE_PATTERN = re.compile(r"[A-Z0-9]{4}\d{7}")
+FLEXITANK_NUMBER_PATTERN = re.compile(r"[A-Z0-9]{2,8}-[A-Z0-9]{2,8}-[A-Z0-9]{2,8}")
 
 OWNER_CODE_VALUES = {
     "A": 10,
@@ -72,6 +74,10 @@ _OCR_LOCK = Lock()
 
 class ContainerOcrError(RuntimeError):
     """Raised when all OCR providers fail to return a container number."""
+
+
+class FlexitankOcrError(RuntimeError):
+    """Raised when all OCR providers fail to return a flexitank serial number."""
 
 
 @lru_cache(maxsize=1)
@@ -185,6 +191,51 @@ def _find_best_container_number(texts: list[tuple[str, float]]) -> str | None:
     return best_candidate
 
 
+def _normalize_flexitank_text(text: str) -> str:
+    value = re.sub(r"[^A-Z0-9-]+", "", text.upper())
+    value = re.sub(r"-{2,}", "-", value).strip("-")
+    return value
+
+
+def _flexitank_candidate_sources(texts: list[tuple[str, float]]) -> list[tuple[str, float]]:
+    sources: list[tuple[str, float]] = []
+    normalized_texts = [(_normalize_flexitank_text(text), score) for text, score in texts]
+    normalized_texts = [(text, score) for text, score in normalized_texts if text]
+    sources.extend(normalized_texts)
+
+    for index in range(len(normalized_texts)):
+        combined = ""
+        scores: list[float] = []
+        for text, score in normalized_texts[index:index + 4]:
+            separator = "" if not combined or combined.endswith("-") else "-"
+            combined = f"{combined}{separator}{text}"
+            scores.append(score)
+            sources.append((combined, min(scores)))
+
+    all_text = "-".join(text.strip("-") for text, _ in normalized_texts if text.strip("-"))
+    if all_text:
+        average_score = sum(score for _, score in normalized_texts) / len(normalized_texts)
+        sources.append((all_text, average_score))
+
+    return sources
+
+
+def _find_best_flexitank_number(texts: list[tuple[str, float]]) -> str | None:
+    candidates: list[tuple[str, float]] = []
+
+    for source, score in _flexitank_candidate_sources(texts):
+        for match in FLEXITANK_NUMBER_PATTERN.finditer(source):
+            candidate = _normalize_flexitank_text(match.group(0))
+            if candidate.count("-") >= 2:
+                candidates.append((candidate, score))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: (item[1], len(item[0])), reverse=True)
+    return candidates[0][0]
+
+
 def detect_container_number(image_path: Path) -> str:
     container_number: str | None = None
 
@@ -207,3 +258,27 @@ def detect_container_number(image_path: Path) -> str:
             gemini_error = exc
 
     raise ContainerOcrError("Container number could not be detected") from gemini_error
+
+
+def detect_flexitank_number(image_path: Path) -> str:
+    flexitank_number: str | None = None
+
+    try:
+        with _OCR_LOCK:
+            result = _get_ocr().predict(str(image_path))
+        recognized_texts = _extract_recognized_texts(result)
+        flexitank_number = _find_best_flexitank_number(recognized_texts)
+    except Exception:
+        flexitank_number = None
+
+    if flexitank_number is not None:
+        return flexitank_number
+
+    gemini_error: GeminiServiceError | None = None
+    if settings.gemini_configured:
+        try:
+            return extract_flexitank_number_with_gemini(image_path)
+        except GeminiServiceError as exc:
+            gemini_error = exc
+
+    raise FlexitankOcrError("Flexitank serial number could not be detected") from gemini_error

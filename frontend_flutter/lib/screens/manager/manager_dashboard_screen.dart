@@ -23,6 +23,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   String _status = 'submitted';
   int _pendingCount = 0;
   int _lastKnownPendingCount = 0;
+  bool _isExportingSelection = false;
+  final Set<String> _selectedInspectionIds = {};
   Timer? _pollingTimer;
   late Future<List<ContainerInspection>> inspectionsFuture;
 
@@ -66,6 +68,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   void _setStatus(String status) {
     setState(() {
       _status = status;
+      _selectedInspectionIds.clear();
       inspectionsFuture = _loadInspections();
     });
   }
@@ -100,6 +103,110 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       });
     } catch (_) {
       return;
+    }
+  }
+
+  bool _canSelect(ContainerInspection inspection) {
+    return inspection.status == InspectionStatus.accepted;
+  }
+
+  void _toggleSelection(ContainerInspection inspection, bool selected) {
+    if (!_canSelect(inspection)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only accepted inspections can be grouped for a report.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      if (selected) {
+        _selectedInspectionIds.add(inspection.id);
+      } else {
+        _selectedInspectionIds.remove(inspection.id);
+      }
+    });
+  }
+
+  Future<void> _exportSelectedFittingPhotos(
+    List<ContainerInspection> inspections,
+  ) async {
+    final selected = inspections
+        .where((inspection) => _selectedInspectionIds.contains(inspection.id))
+        .toList();
+
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one accepted inspection.')),
+      );
+      return;
+    }
+
+    final bookingNumbers = {
+      for (final inspection in selected) inspection.bookingNumber.trim().toLowerCase(),
+    };
+    if (bookingNumbers.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select inspections from the same booking number.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Create Group Report'),
+          content: Text(
+            'Create one fitting photo PowerPoint for ${selected.length} selected inspection(s) with booking ${selected.first.bookingNumber}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Create Report'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isExportingSelection = true;
+    });
+
+    try {
+      final message = await _apiService.exportSelectedFittingPhotosAndEmail(
+        selected.map((inspection) => inspection.id).toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedInspectionIds.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report export failed. Please check the backend connection.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingSelection = false;
+        });
+      }
     }
   }
 
@@ -185,6 +292,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                 }
 
                 final inspections = snapshot.data ?? [];
+                _selectedInspectionIds.removeWhere(
+                  (id) => !inspections.any(
+                    (inspection) =>
+                        inspection.id == id && _canSelect(inspection),
+                  ),
+                );
 
                 if (inspections.isEmpty) {
                   return RefreshIndicator(
@@ -201,78 +314,113 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
 
                 return RefreshIndicator(
                   onRefresh: refresh,
-                  child: ListView.separated(
+                  child: ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: inspections.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemCount: inspections.length + 1,
                     itemBuilder: (context, index) {
-                      final inspection = inspections[index];
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _SelectionReportBar(
+                            selectedCount: _selectedInspectionIds.length,
+                            isBusy: _isExportingSelection,
+                            onCreateReport: () =>
+                                _exportSelectedFittingPhotos(inspections),
+                            onClear: () {
+                              setState(() {
+                                _selectedInspectionIds.clear();
+                              });
+                            },
+                          ),
+                        );
+                      }
 
-                      return Material(
-                        color: Colors.white,
-                        elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
+                      final listIndex = index - 1;
+                      final inspection = inspections[listIndex];
+                      final canSelect = _canSelect(inspection);
+                      final isSelected =
+                          _selectedInspectionIds.contains(inspection.id);
+
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: listIndex == inspections.length - 1 ? 0 : 12,
+                        ),
+                        child: Material(
+                          color: Colors.white,
+                          elevation: 2,
+                          shadowColor: Colors.black.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(14),
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => ManagerReviewScreen(
-                                  inspection: inspection,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ManagerReviewScreen(
+                                    inspection: inspection,
+                                  ),
                                 ),
+                              );
+                              await refresh();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value: isSelected,
+                                    onChanged: canSelect
+                                        ? (value) => _toggleSelection(
+                                              inspection,
+                                              value ?? false,
+                                            )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    width: 52,
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF075DCC)
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: const Icon(
+                                      Icons.inventory_2_outlined,
+                                      color: Color(0xFF075DCC),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          inspection.containerNumber,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${inspection.bookingNumber} - ${inspection.portName} - ${inspection.workerName} - ${inspection.formattedDate}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Color(0xFF667085),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  StatusBadge(status: inspection.status),
+                                ],
                               ),
-                            );
-                            await refresh();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF075DCC)
-                                        .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                    Icons.inventory_2_outlined,
-                                    color: Color(0xFF075DCC),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        inspection.containerNumber,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${inspection.portName} - ${inspection.workerName} - ${inspection.formattedDate}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Color(0xFF667085),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                StatusBadge(status: inspection.status),
-                              ],
                             ),
                           ),
                         ),
@@ -284,6 +432,97 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SelectionReportBar extends StatelessWidget {
+  final int selectedCount;
+  final bool isBusy;
+  final VoidCallback onCreateReport;
+  final VoidCallback onClear;
+
+  const _SelectionReportBar({
+    required this.selectedCount,
+    required this.isBusy,
+    required this.onCreateReport,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFEAF2FF),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 560;
+            final summary = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.checklist_rounded, color: Color(0xFF075DCC)),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    selectedCount == 0
+                        ? 'Tick accepted inspections to group in one report.'
+                        : '$selectedCount inspection(s) selected',
+                    style: const TextStyle(
+                      color: Color(0xFF12355B),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            );
+            final actions = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  onPressed: selectedCount == 0 || isBusy ? null : onClear,
+                  child: const Text('Clear'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed:
+                      selectedCount == 0 || isBusy ? null : onCreateReport,
+                  icon: isBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.slideshow_rounded),
+                  label: const Text('Create Report'),
+                ),
+              ],
+            );
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  summary,
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: actions,
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: summary),
+                actions,
+              ],
+            );
+          },
+        ),
       ),
     );
   }

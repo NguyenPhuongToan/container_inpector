@@ -17,6 +17,10 @@ python -m venv venv
 .\venv\Scripts\pip install -r requirements.txt
 ```
 
+The fitting photo PowerPoint export uses
+`templates/fitting_photo_template.pptx` by default. Override it with
+`FITTING_PHOTO_TEMPLATE_PATH` if the company template is stored elsewhere.
+
 Start the API:
 
 ```powershell

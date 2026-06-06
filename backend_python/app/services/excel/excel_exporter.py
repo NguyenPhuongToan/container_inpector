@@ -24,6 +24,7 @@ def _inspection_to_export_dict(inspection: Inspection) -> dict[str, Any]:
     ]
     return {
         "container_number": inspection.container_number,
+        "flexitank_number": inspection.flexitank_number or "",
         "booking_number": inspection.booking_number,
         "truck_number": inspection.truck_number,
         "worker_name": inspection.worker_name,
@@ -62,6 +63,7 @@ def generate_excel(inspection: Inspection) -> Path:
 
         rows = [
             ("Container Number", inspection_data["container_number"]),
+            ("Flexitank Number", inspection_data["flexitank_number"]),
             ("Booking Number", inspection_data["booking_number"]),
             ("Truck Number", inspection_data["truck_number"]),
             ("Worker", inspection_data["worker_name"]),

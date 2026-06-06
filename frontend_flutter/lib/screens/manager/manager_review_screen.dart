@@ -22,7 +22,8 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
   late InspectionStatus currentStatus;
 
   static const List<String> photoLabels = [
-    'Container Number',
+    'Container Door Number',
+    'Flexitank Serial Number',
     'Front',
     'Rear',
     'Left Side',
@@ -33,9 +34,6 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
     'Rear Right',
     'Ceiling',
     'Floor',
-    'Door',
-    'Lock',
-    'CSC Plate',
   ];
 
   @override
@@ -293,6 +291,24 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
                     )
                 : null,
           ),
+          const SizedBox(height: 10),
+          _ActionButton(
+            isBusy: isBusy,
+            icon: Icons.slideshow_rounded,
+            label: canExport
+                ? 'Export Fitting Photo PPT and Email'
+                : 'PPT Available After Acceptance',
+            onPressed: canExport
+                ? () => runExportAction(
+                      title: 'Export Fitting Photo PPT',
+                      confirmation:
+                          'Generate one fitting photo PowerPoint for all accepted containers with booking ${inspection.bookingNumber}?',
+                      confirmLabel: 'Export',
+                      action: () =>
+                          _apiService.exportFittingPhotoAndEmail(inspection.id),
+                    )
+                : null,
+          ),
         ],
       ),
     );
@@ -534,6 +550,10 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         children: [
           _InfoRow('Container Number', inspection.containerNumber),
+          _InfoRow(
+            'Flexitank Number',
+            inspection.flexitankNumber.isEmpty ? '-' : inspection.flexitankNumber,
+          ),
           _InfoRow('Booking Number', inspection.bookingNumber),
           _InfoRow('Truck Number', inspection.truckNumber),
           _InfoRow('Worker', inspection.workerName),

@@ -21,6 +21,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
   final _picker = ImagePicker();
 
   final _containerNumberController = TextEditingController();
+  final _flexitankNumberController = TextEditingController();
   final _bookingNumberController = TextEditingController();
   final _truckNumberController = TextEditingController();
   final _workerNameController = TextEditingController();
@@ -37,7 +38,8 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     super.initState();
 
     final titles = [
-      'Container Number',
+      'Container Door Number',
+      'Flexitank Serial Number',
       'Front',
       'Rear',
       'Left Side',
@@ -48,9 +50,6 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       'Rear Right',
       'Ceiling',
       'Floor',
-      'Door',
-      'Lock',
-      'CSC Plate',
     ];
 
     slots = List.generate(
@@ -65,6 +64,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
   @override
   void dispose() {
     _containerNumberController.dispose();
+    _flexitankNumberController.dispose();
     _bookingNumberController.dispose();
     _truckNumberController.dispose();
     _workerNameController.dispose();
@@ -90,9 +90,14 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       slots[index].image = pickedFile;
     });
 
-    if (slots[index].title == 'Container Number' &&
+    if (slots[index].title == 'Container Door Number' &&
         slots[index].image != null) {
-      await _performAIScan(slots[index].image!);
+      await _performContainerScan(slots[index].image!);
+    }
+
+    if (slots[index].title == 'Flexitank Serial Number' &&
+        slots[index].image != null) {
+      await _performFlexitankScan(slots[index].image!);
     }
   }
 
@@ -122,7 +127,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     return result ?? false;
   }
 
-  Future<void> _performAIScan(XFile imageFile) async {
+  Future<void> _performContainerScan(XFile imageFile) async {
     _showMessage('Scanning container number...');
 
     try {
@@ -142,10 +147,38 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     }
   }
 
+  Future<void> _performFlexitankScan(XFile imageFile) async {
+    _showMessage('Scanning flexitank serial...');
+
+    try {
+      final scannedId = await _apiService.scanFlexitankId(imageFile);
+
+      if (!mounted) return;
+
+      setState(() {
+        _flexitankNumberController.text = scannedId;
+      });
+
+      _showMessage('Flexitank serial detected: $scannedId');
+    } on TimeoutException {
+      _showMessage('AI scan timed out. Please enter the serial manually.');
+    } catch (_) {
+      _showMessage('AI could not read the serial. Please enter it manually.');
+    }
+  }
+
   Future<void> submitInspection() async {
     if (_containerNumberController.text.trim().isEmpty) {
       _showMessage(
         'Container number is required',
+        backgroundColor: const Color(0xFFE53935),
+      );
+      return;
+    }
+
+    if (_flexitankNumberController.text.trim().isEmpty) {
+      _showMessage(
+        'Flexitank serial number is required',
         backgroundColor: const Color(0xFFE53935),
       );
       return;
@@ -158,7 +191,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         .toList();
 
     if (!isFormValid || images.length != slots.length) {
-      _showMessage('Please fill the form and capture all 14 photos.');
+      _showMessage('Please fill the form and capture all 12 photos.');
       return;
     }
 
@@ -169,6 +202,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     try {
       await _apiService.submitInspection(
         containerNumber: _containerNumberController.text.trim(),
+        flexitankNumber: _flexitankNumberController.text.trim(),
         bookingNumber: _bookingNumberController.text.trim(),
         truckNumber: _truckNumberController.text.trim(),
         workerName: _workerNameController.text.trim(),
@@ -233,11 +267,11 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '$_addedPhotoCount / 14 photos added',
+                  '$_addedPhotoCount / 12 photos added',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: _addedPhotoCount == 14
+                    color: _addedPhotoCount == 12
                         ? const Color(0xFF437A22)
                         : const Color(0xFF667085),
                   ),
@@ -246,6 +280,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                 _ContainerInfoForm(
                   formKey: _formKey,
                   containerNumberController: _containerNumberController,
+                  flexitankNumberController: _flexitankNumberController,
                   bookingNumberController: _bookingNumberController,
                   truckNumberController: _truckNumberController,
                   workerNameController: _workerNameController,
@@ -434,6 +469,7 @@ class _ProgressCard extends StatelessWidget {
 class _ContainerInfoForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController containerNumberController;
+  final TextEditingController flexitankNumberController;
   final TextEditingController bookingNumberController;
   final TextEditingController truckNumberController;
   final TextEditingController workerNameController;
@@ -443,6 +479,7 @@ class _ContainerInfoForm extends StatelessWidget {
   const _ContainerInfoForm({
     required this.formKey,
     required this.containerNumberController,
+    required this.flexitankNumberController,
     required this.bookingNumberController,
     required this.truckNumberController,
     required this.workerNameController,
@@ -474,6 +511,10 @@ class _ContainerInfoForm extends StatelessWidget {
             _InputField(
               controller: containerNumberController,
               label: 'Container Number',
+            ),
+            _InputField(
+              controller: flexitankNumberController,
+              label: 'Flexitank Serial Number',
             ),
             _InputField(
               controller: bookingNumberController,
