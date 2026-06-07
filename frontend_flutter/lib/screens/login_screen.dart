@@ -13,8 +13,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'manager@example.com');
-  final _passwordController = TextEditingController(text: 'manager12345');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _apiService = ApiService();
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -171,16 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             },
                       icon: const Icon(Icons.person_add_alt_1_rounded),
                       label: const Text('Create Worker Account'),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Test accounts: worker@example.com / worker12345, manager@example.com / manager12345',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF667085),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
                     ),
                   ],
                 ),

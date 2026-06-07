@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from app.core.constants import OCR_TEMP_ROOT, REPORT_ROOT
+from app.core.constants import OCR_TEMP_ROOT
 
 
 def _remove_empty_parents(path: Path, stop_at: Path) -> None:
@@ -38,7 +38,4 @@ def _delete_old_files(root: Path, cutoff: datetime) -> int:
 
 def cleanup_old_files(max_age_hours: int = 24) -> int:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
-    deleted = 0
-    deleted += _delete_old_files(OCR_TEMP_ROOT, cutoff)
-    deleted += _delete_old_files(REPORT_ROOT, cutoff)
-    return deleted
+    return _delete_old_files(OCR_TEMP_ROOT, cutoff)

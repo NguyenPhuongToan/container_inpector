@@ -61,7 +61,6 @@ app.add_middleware(SlowAPIMiddleware)
 app.include_router(inspection_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(upload_router, prefix="/api")
-app.include_router(upload_router)
 
 
 @app.get("/")
