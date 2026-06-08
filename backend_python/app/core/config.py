@@ -41,6 +41,9 @@ class Settings:
     )
     jwt_secret: str = os.getenv("JWT_SECRET", "change-this-development-secret")
     jwt_expires_minutes: int = int(os.getenv("JWT_EXPIRES_MINUTES", "1440"))
+    worker_jwt_expires_minutes: int = int(
+        os.getenv("WORKER_JWT_EXPIRES_MINUTES", "10080")
+    )
     allowed_origins: str = os.getenv(
         "ALLOWED_ORIGINS",
         "http://localhost:3000,http://127.0.0.1:3000",

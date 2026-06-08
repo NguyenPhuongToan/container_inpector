@@ -43,6 +43,7 @@ Minimum demo values:
 DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/container_inspection
 JWT_SECRET=replace_this_with_a_long_random_secret
 JWT_EXPIRES_MINUTES=1440
+WORKER_JWT_EXPIRES_MINUTES=10080
 MANAGER_EMAIL=manager@example.com
 ```
 

@@ -46,8 +46,13 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def create_access_token(*, user_id: str, role: str, email: str) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
+    expires_minutes = (
+        settings.worker_jwt_expires_minutes
+        if role == "worker"
+        else settings.jwt_expires_minutes
+    )
     expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.jwt_expires_minutes
+        minutes=expires_minutes
     )
     payload = {
         "sub": user_id,
