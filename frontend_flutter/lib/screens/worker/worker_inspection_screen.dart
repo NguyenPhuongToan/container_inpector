@@ -501,7 +501,7 @@ class _ContainerInfoForm extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Container Information',
+              'Thông tin container',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
@@ -510,31 +510,31 @@ class _ContainerInfoForm extends StatelessWidget {
             const SizedBox(height: 16),
             _InputField(
               controller: containerNumberController,
-              label: 'Container Number',
+              label: 'Số container',
             ),
             _InputField(
               controller: flexitankNumberController,
-              label: 'Flexitank Serial Number',
+              label: 'Số serial flexitank',
             ),
             _InputField(
               controller: bookingNumberController,
-              label: 'Booking Number',
+              label: 'Số booking',
             ),
             _InputField(
               controller: truckNumberController,
-              label: 'Truck Number',
+              label: 'Số xe',
             ),
             _InputField(
               controller: workerNameController,
-              label: 'Worker Name',
+              label: 'Tên nhân viên',
             ),
             _InputField(
               controller: portNameController,
-              label: 'Port / Location',
+              label: 'Cảng / Địa điểm',
             ),
             _InputField(
               controller: notesController,
-              label: 'Notes',
+              label: 'Ghi chú',
               required: false,
               maxLines: 3,
               textInputAction: TextInputAction.done,
