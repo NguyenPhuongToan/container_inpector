@@ -10,5 +10,5 @@ if command -v pm2 >/dev/null 2>&1; then
   pm2 startOrReload ecosystem.config.js
 else
   echo "Postgres restarted. PM2 is not installed, so start the backend manually:"
-  echo "  ./venv/Scripts/uvicorn.exe app.main:app --host 127.0.0.1 --port 8000"
+  echo "  ./venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000"
 fi

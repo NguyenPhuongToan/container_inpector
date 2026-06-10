@@ -34,11 +34,42 @@ cd backend_python
 .\venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000
 ```
 
+## Production Backend
+
+On a Linux VPS, run the deployment helper from the repository root:
+
+```bash
+./infrastructure/scripts/deploy.sh
+```
+
+Then start or reload the backend with PM2:
+
+```bash
+cd backend_python
+pm2 startOrReload ecosystem.config.js
+```
+
+Without PM2, start the API manually:
+
+```bash
+cd backend_python
+./venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
 ## Local Frontend
 
 ```powershell
 cd frontend_flutter
 flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
+```
+
+## Production Frontend
+
+Build the frontend with the production API URL:
+
+```bash
+cd frontend_flutter
+flutter build web --dart-define=API_BASE_URL=https://your-domain.com/api
 ```
 
 ## Notes Before Production
