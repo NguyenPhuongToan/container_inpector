@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../models/image_slot.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_session.dart';
 import '../../widgets/camera_card.dart';
 import 'worker_history_screen.dart';
 
@@ -38,18 +39,18 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     super.initState();
 
     final titles = [
-      'Số serial container',
-      'Ảnh sau khi lắp đặt',
-      'Thông tin hàng hóa',
-      'Số serial flexitank',
-      'Ảnh lắp đặt bao (nhìn từ bên ngoài)',
-      'Ảnh lắp đặt bao (nhìn từ bên trong)',
-      'Sàn rìa trái',
-      'Sàn rìa phải',
-      'Cạnh trái container (bên ngoài)',
-      'Cạnh phải container (bên ngoài)',
-      'Ảnh sàn container',
-      'Ảnh tổng thể container',
+      'Container Door Number',
+      'Flexitank Serial Number',
+      'Front',
+      'Rear',
+      'Left Side',
+      'Right Side',
+      'Front Left',
+      'Front Right',
+      'Rear Left',
+      'Rear Right',
+      'Ceiling',
+      'Floor',
     ];
 
     slots = List.generate(
@@ -59,6 +60,11 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         title: titles[index],
       ),
     );
+
+    final fullName = AuthSession.user?.fullName ?? '';
+    if (fullName.isNotEmpty) {
+      _workerNameController.text = fullName;
+    }
   }
 
   @override
@@ -91,12 +97,12 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       slots[index].image = pickedFile;
     });
 
-    if (slots[index].title == 'Số serial container' &&
+    if (slots[index].title == 'Container Door Number' &&
         slots[index].image != null) {
       await _performContainerScan(slots[index].image!);
     }
 
-    if (slots[index].title == 'Số serial flexitank' &&
+    if (slots[index].title == 'Flexitank Serial Number' &&
         slots[index].image != null) {
       await _performFlexitankScan(slots[index].image!);
     }
@@ -172,14 +178,6 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     if (_containerNumberController.text.trim().isEmpty) {
       _showMessage(
         'Container number is required',
-        backgroundColor: const Color(0xFFE53935),
-      );
-      return;
-    }
-
-    if (_flexitankNumberController.text.trim().isEmpty) {
-      _showMessage(
-        'Flexitank serial number is required',
         backgroundColor: const Color(0xFFE53935),
       );
       return;
@@ -516,10 +514,12 @@ class _ContainerInfoForm extends StatelessWidget {
             _InputField(
               controller: flexitankNumberController,
               label: 'Số serial flexitank',
+              required: false,
             ),
             _InputField(
               controller: bookingNumberController,
               label: 'Số booking',
+              required: false,
             ),
             _InputField(
               controller: truckNumberController,

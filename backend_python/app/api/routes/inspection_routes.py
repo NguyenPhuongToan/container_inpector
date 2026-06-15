@@ -149,7 +149,7 @@ async def create_inspection(
     request: Request,
     container_number: str = Form(...),
     flexitank_number: str = Form(""),
-    booking_number: str = Form(...),
+    booking_number: str = Form(""),
     truck_number: str = Form(...),
     worker_name: str = Form(...),
     port_name: str = Form(...),
