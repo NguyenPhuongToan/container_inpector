@@ -22,18 +22,18 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
   late InspectionStatus currentStatus;
 
   static const List<String> photoLabels = [
-    'Container Door Number',
-    'Flexitank Serial Number',
-    'Front',
-    'Rear',
-    'Left Side',
-    'Right Side',
-    'Front Left',
-    'Front Right',
-    'Rear Left',
-    'Rear Right',
-    'Ceiling',
-    'Floor',
+    'Số serial container',
+    'Ảnh sau khi lắp đặt',
+    'Thông tin hàng hóa',
+    'Số serial flexitank',
+    'Ảnh lắp đặt bao (nhìn từ bên ngoài)',
+    'Ảnh lắp đặt bao (nhìn từ bên trong)',
+    'Sàn rìa trái',
+    'Sàn rìa phải',
+    'Cạnh trái container (bên ngoài)',
+    'Cạnh phải container (bên ngoài)',
+    'Ảnh sàn container',
+    'Ảnh tổng thể container',
   ];
 
   @override
@@ -552,7 +552,9 @@ class _InfoCard extends StatelessWidget {
           _InfoRow('Container Number', inspection.containerNumber),
           _InfoRow(
             'Flexitank Number',
-            inspection.flexitankNumber.isEmpty ? '-' : inspection.flexitankNumber,
+            inspection.flexitankNumber.isEmpty
+                ? '-'
+                : inspection.flexitankNumber,
           ),
           _InfoRow('Booking Number', inspection.bookingNumber),
           _InfoRow('Truck Number', inspection.truckNumber),

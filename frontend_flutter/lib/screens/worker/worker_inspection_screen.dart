@@ -38,18 +38,18 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     super.initState();
 
     final titles = [
-      'Container Door Number',
-      'Flexitank Serial Number',
-      'Front',
-      'Rear',
-      'Left Side',
-      'Right Side',
-      'Front Left',
-      'Front Right',
-      'Rear Left',
-      'Rear Right',
-      'Ceiling',
-      'Floor',
+      'Số serial container',
+      'Ảnh sau khi lắp đặt',
+      'Thông tin hàng hóa',
+      'Số serial flexitank',
+      'Ảnh lắp đặt bao (nhìn từ bên ngoài)',
+      'Ảnh lắp đặt bao (nhìn từ bên trong)',
+      'Sàn rìa trái',
+      'Sàn rìa phải',
+      'Cạnh trái container (bên ngoài)',
+      'Cạnh phải container (bên ngoài)',
+      'Ảnh sàn container',
+      'Ảnh tổng thể container',
     ];
 
     slots = List.generate(
@@ -80,9 +80,10 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     }
 
     final pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 72,
-    );
+        source: ImageSource.camera,
+        imageQuality: 60,
+        maxWidth: 2048,
+        maxHeight: 2048);
 
     if (pickedFile == null) return;
 
@@ -90,12 +91,12 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       slots[index].image = pickedFile;
     });
 
-    if (slots[index].title == 'Container Door Number' &&
+    if (slots[index].title == 'Số serial container' &&
         slots[index].image != null) {
       await _performContainerScan(slots[index].image!);
     }
 
-    if (slots[index].title == 'Flexitank Serial Number' &&
+    if (slots[index].title == 'Số serial flexitank' &&
         slots[index].image != null) {
       await _performFlexitankScan(slots[index].image!);
     }

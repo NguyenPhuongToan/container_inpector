@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/image_slot.dart';
 
-class CameraCard extends StatelessWidget {
+class CameraCard extends StatefulWidget {
   final ImageSlot slot;
   final VoidCallback onTap;
 
@@ -15,6 +15,24 @@ class CameraCard extends StatelessWidget {
   });
 
   @override
+  State<CameraCard> createState() => _CameraCardState();
+}
+
+class _CameraCardState extends State<CameraCard> {
+  Uint8List? _cachedBytes;
+  String? _cachedPath;
+
+  Future<Uint8List?> _getBytes() async {
+    final image = widget.slot.image;
+    if (image == null) return null;
+    if (_cachedPath == image.path && _cachedBytes != null) return _cachedBytes;
+    final bytes = await image.readAsBytes();
+    _cachedPath = image.path;
+    _cachedBytes = bytes;
+    return bytes;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
@@ -23,30 +41,30 @@ class CameraCard extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Stack(
           children: [
             Column(
               children: [
                 Expanded(
                   child: SizedBox.expand(
-                    child: slot.image != null
-                        ? FutureBuilder<Uint8List>(
-                            future: slot.image!.readAsBytes(),
+                    child: widget.slot.image != null
+                        ? FutureBuilder<Uint8List?>(
+                            future: _getBytes(),
                             builder: (context, snapshot) {
                               if (!snapshot.hasData) {
                                 return const Center(
                                   child: CircularProgressIndicator(),
                                 );
                               }
-
                               return Image.memory(
                                 snapshot.data!,
                                 fit: BoxFit.cover,
+                                cacheWidth: 200,
                               );
                             },
                           )
-                        : _EmptyImagePreview(slot: slot),
+                        : _EmptyImagePreview(slot: widget.slot),
                   ),
                 ),
                 Container(
@@ -57,7 +75,7 @@ class CameraCard extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      slot.title,
+                      widget.slot.title,
                       maxLines: 1,
                       style: const TextStyle(
                         color: Color(0xFF111111),
@@ -84,7 +102,7 @@ class CameraCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  '${slot.angle}',
+                  '${widget.slot.angle}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -93,7 +111,7 @@ class CameraCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (slot.isCaptured)
+            if (widget.slot.isCaptured)
               const Positioned(
                 top: 8,
                 right: 8,
@@ -165,18 +183,6 @@ class _EmptyImagePreview extends StatelessWidget {
   }
 
   IconData _iconForSlot(String title) {
-    if (title == 'Lock') return Icons.lock_rounded;
-    if (title == 'CSC Plate') return Icons.badge_rounded;
-    if (title == 'Container Door Number') return Icons.pin_rounded;
-    if (title == 'Flexitank Serial Number') return Icons.qr_code_2_rounded;
-    if (title == 'Ceiling') {
-      return Icons.vertical_align_top_rounded;
-    }
-    if (title == 'Floor') {
-      return Icons.vertical_align_bottom_rounded;
-    }
-    if (title == 'Door') return Icons.door_front_door_rounded;
-
     return Icons.inventory_2_rounded;
   }
 }

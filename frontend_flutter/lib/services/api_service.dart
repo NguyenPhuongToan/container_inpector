@@ -172,7 +172,7 @@ class ApiService {
     );
 
     final streamedResponse = await request.send().timeout(
-          const Duration(seconds: 25),
+          const Duration(seconds: 60),
         );
     final response = await http.Response.fromStream(streamedResponse);
     _checkUnauthorized(response);
@@ -207,7 +207,7 @@ class ApiService {
     );
 
     final streamedResponse = await request.send().timeout(
-          const Duration(seconds: 25),
+          const Duration(seconds: 60),
         );
     final response = await http.Response.fromStream(streamedResponse);
     _checkUnauthorized(response);
