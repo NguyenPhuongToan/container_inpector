@@ -568,6 +568,129 @@ class TestInspectionLifecycle:
             assert inspection["container_number"] == "TCLU1234565"
 
 
+class TestBookingNumber:
+    def test_worker_can_submit_without_booking_number(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            token = _register_worker(client)
+            inspection = _create_inspection(client, token, booking_number="")
+            assert inspection["booking_number"] == ""
+            assert inspection["status"] == "submitted"
+
+    def test_accept_fails_without_booking_number(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            worker_token = _register_worker(client)
+            inspection = _create_inspection(client, worker_token, booking_number="")
+            manager_token = _login(client, "manager@example.com", "manager12345")
+
+            response = client.post(
+                f"/api/inspections/{inspection['id']}/accept",
+                headers=_headers(manager_token),
+            )
+            assert response.status_code == 400
+            assert "booking number" in response.json()["detail"].lower()
+
+    def test_manager_can_set_booking_number_then_accept(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            worker_token = _register_worker(client)
+            inspection = _create_inspection(client, worker_token, booking_number="")
+            manager_token = _login(client, "manager@example.com", "manager12345")
+
+            update_response = client.patch(
+                f"/api/inspections/{inspection['id']}/booking-number",
+                headers=_headers(manager_token),
+                json={"booking_number": "BK-NEW-001"},
+            )
+            assert update_response.status_code == 200, update_response.text
+            assert update_response.json()["booking_number"] == "BK-NEW-001"
+
+            accept_response = client.post(
+                f"/api/inspections/{inspection['id']}/accept",
+                headers=_headers(manager_token),
+            )
+            assert accept_response.status_code == 200, accept_response.text
+            assert accept_response.json()["status"] == "accepted"
+            assert accept_response.json()["booking_number"] == "BK-NEW-001"
+
+    def test_worker_cannot_update_booking_number(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            worker_token = _register_worker(client)
+            inspection = _create_inspection(client, worker_token, booking_number="")
+
+            response = client.patch(
+                f"/api/inspections/{inspection['id']}/booking-number",
+                headers=_headers(worker_token),
+                json={"booking_number": "BK-002"},
+            )
+            assert response.status_code == 403
+
+    def test_update_booking_number_rejects_empty_value(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            worker_token = _register_worker(client)
+            inspection = _create_inspection(client, worker_token, booking_number="BK-003")
+            manager_token = _login(client, "manager@example.com", "manager12345")
+
+            response = client.patch(
+                f"/api/inspections/{inspection['id']}/booking-number",
+                headers=_headers(manager_token),
+                json={"booking_number": "   "},
+            )
+            assert response.status_code in (400, 422)
+
+    def test_recent_booking_numbers_are_deduped_and_ordered(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            token = _register_worker(client)
+            _create_inspection(client, token, booking_number="BK-100")
+            _create_inspection(client, token, booking_number="BK-200")
+            _create_inspection(client, token, booking_number="BK-100")
+
+            response = client.get(
+                "/api/inspections/booking-numbers/recent",
+                headers=_headers(token),
+            )
+            assert response.status_code == 200, response.text
+            numbers = response.json()["booking_numbers"]
+
+            assert numbers[0] == "BK-100"
+            assert numbers.count("BK-100") == 1
+            assert "BK-200" in numbers
+
+    def test_recent_booking_numbers_excludes_empty(self, tmp_path, monkeypatch):
+        from fastapi.testclient import TestClient
+
+        app = _fresh_app(tmp_path, monkeypatch)
+        with TestClient(app) as client:
+            token = _register_worker(client)
+            _create_inspection(client, token, booking_number="")
+            _create_inspection(client, token, booking_number="BK-300")
+
+            response = client.get(
+                "/api/inspections/booking-numbers/recent",
+                headers=_headers(token),
+            )
+            assert response.status_code == 200, response.text
+            numbers = response.json()["booking_numbers"]
+            assert "" not in numbers
+            assert "BK-300" in numbers
+
+
 class TestExports:
     def _setup_accepted(self, client):
         worker_token = _register_worker(

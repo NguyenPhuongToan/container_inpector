@@ -18,6 +18,7 @@ class ManagerReviewScreen extends StatefulWidget {
 
 class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
   final _apiService = ApiService();
+  final _bookingNumberController = TextEditingController();
   bool isBusy = false;
   late InspectionStatus currentStatus;
 
@@ -40,6 +41,46 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
   void initState() {
     super.initState();
     currentStatus = widget.inspection.status;
+    _bookingNumberController.text = widget.inspection.bookingNumber;
+  }
+
+  @override
+  void dispose() {
+    _bookingNumberController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleAccept() async {
+    final bookingNumber = _bookingNumberController.text.trim();
+
+    if (bookingNumber.isEmpty) {
+      _showMessage(
+        'Booking number is required before accepting this inspection.',
+      );
+      return;
+    }
+
+    await runAction(
+      title: 'Accept Container',
+      confirmation: 'Are you sure you want to accept this inspection?',
+      confirmLabel: 'Accept',
+      action: () async {
+        if (bookingNumber != widget.inspection.bookingNumber) {
+          await _apiService.updateBookingNumber(
+            widget.inspection.id,
+            bookingNumber,
+          );
+        }
+        await _apiService.acceptInspection(widget.inspection.id);
+      },
+      successMessage: 'Inspection accepted.',
+      popOnSuccess: false,
+      onSuccess: () {
+        setState(() {
+          currentStatus = InspectionStatus.accepted;
+        });
+      },
+    );
   }
 
   Future<void> runAction({
@@ -166,7 +207,11 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _InfoCard(inspection: inspection),
+          _InfoCard(
+            inspection: inspection,
+            bookingNumberController: _bookingNumberController,
+            bookingNumberEditable: canDecide,
+          ),
           const SizedBox(height: 18),
           const Text(
             'Inspection Photos',
@@ -215,22 +260,7 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
                 ? 'Container Accepted'
                 : 'Accept Container',
             filled: true,
-            onPressed: canDecide
-                ? () => runAction(
-                      title: 'Accept Container',
-                      confirmation:
-                          'Are you sure you want to accept this inspection?',
-                      confirmLabel: 'Accept',
-                      action: () => _apiService.acceptInspection(inspection.id),
-                      successMessage: 'Inspection accepted.',
-                      popOnSuccess: false,
-                      onSuccess: () {
-                        setState(() {
-                          currentStatus = InspectionStatus.accepted;
-                        });
-                      },
-                    )
-                : null,
+            onPressed: canDecide ? _handleAccept : null,
           ),
           const SizedBox(height: 10),
           _ActionButton(
@@ -302,7 +332,7 @@ class _ManagerReviewScreenState extends State<ManagerReviewScreen> {
                 ? () => runExportAction(
                       title: 'Export Fitting Photo PPT',
                       confirmation:
-                          'Generate one fitting photo PowerPoint for all accepted containers with booking ${inspection.bookingNumber}?',
+                          'Generate one fitting photo PowerPoint for all accepted containers with booking ${_bookingNumberController.text}?',
                       confirmLabel: 'Export',
                       action: () =>
                           _apiService.exportFittingPhotoAndEmail(inspection.id),
@@ -529,8 +559,14 @@ class FullscreenImageScreen extends StatelessWidget {
 
 class _InfoCard extends StatelessWidget {
   final ContainerInspection inspection;
+  final TextEditingController bookingNumberController;
+  final bool bookingNumberEditable;
 
-  const _InfoCard({required this.inspection});
+  const _InfoCard({
+    required this.inspection,
+    required this.bookingNumberController,
+    this.bookingNumberEditable = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -556,12 +592,71 @@ class _InfoCard extends StatelessWidget {
                 ? '-'
                 : inspection.flexitankNumber,
           ),
-          _InfoRow('Booking Number', inspection.bookingNumber),
+          if (bookingNumberEditable)
+            _BookingNumberField(controller: bookingNumberController)
+          else
+            _InfoRow(
+              'Booking Number',
+              bookingNumberController.text.isEmpty
+                  ? '-'
+                  : bookingNumberController.text,
+            ),
           _InfoRow('Truck Number', inspection.truckNumber),
           _InfoRow('Worker', inspection.workerName),
           _InfoRow('Port / Location', inspection.portName),
           _InfoRow('Submitted At', inspection.formattedDate),
           _InfoRow('Notes', inspection.notes.isEmpty ? '-' : inspection.notes),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookingNumberField extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _BookingNumberField({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 140,
+            child: Padding(
+              padding: EdgeInsets.only(top: 14),
+              child: Text(
+                'Booking Number',
+                style: TextStyle(
+                  color: Color(0xFF667085),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+              decoration: InputDecoration(
+                hintText: 'Required before accepting',
+                isDense: true,
+                filled: true,
+                fillColor: const Color(0xFFF6F8FB),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

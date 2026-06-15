@@ -31,6 +31,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
 
   late final List<ImageSlot> slots;
   bool isSubmitting = false;
+  List<String> _recentBookingNumbers = [];
 
   int get _addedPhotoCount => slots.where((slot) => slot.isCaptured).length;
 
@@ -64,6 +65,21 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     final fullName = AuthSession.user?.fullName ?? '';
     if (fullName.isNotEmpty) {
       _workerNameController.text = fullName;
+    }
+
+    _loadRecentBookingNumbers();
+  }
+
+  Future<void> _loadRecentBookingNumbers() async {
+    try {
+      final numbers = await _apiService.getRecentBookingNumbers();
+      if (!mounted) return;
+      setState(() {
+        _recentBookingNumbers = numbers;
+      });
+    } catch (_) {
+      // Recent booking numbers are a convenience feature only.
+      // Silently ignore failures so the form remains usable.
     }
   }
 
@@ -285,6 +301,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                   workerNameController: _workerNameController,
                   portNameController: _portNameController,
                   notesController: _notesController,
+                  recentBookingNumbers: _recentBookingNumbers,
                 ),
                 const SizedBox(height: 24),
                 LayoutBuilder(
@@ -474,6 +491,7 @@ class _ContainerInfoForm extends StatelessWidget {
   final TextEditingController workerNameController;
   final TextEditingController portNameController;
   final TextEditingController notesController;
+  final List<String> recentBookingNumbers;
 
   const _ContainerInfoForm({
     required this.formKey,
@@ -484,6 +502,7 @@ class _ContainerInfoForm extends StatelessWidget {
     required this.workerNameController,
     required this.portNameController,
     required this.notesController,
+    this.recentBookingNumbers = const [],
   });
 
   @override
@@ -520,7 +539,17 @@ class _ContainerInfoForm extends StatelessWidget {
               controller: bookingNumberController,
               label: 'Số booking',
               required: false,
+              helperText:
+                  'Không bắt buộc. Quản lý sẽ xác nhận số booking khi duyệt.',
             ),
+            if (recentBookingNumbers.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _RecentBookingSuggestions(
+                  bookingNumbers: recentBookingNumbers,
+                  controller: bookingNumberController,
+                ),
+              ),
             _InputField(
               controller: truckNumberController,
               label: 'Số xe',
@@ -547,12 +576,62 @@ class _ContainerInfoForm extends StatelessWidget {
   }
 }
 
+class _RecentBookingSuggestions extends StatelessWidget {
+  final List<String> bookingNumbers;
+  final TextEditingController controller;
+
+  const _RecentBookingSuggestions({
+    required this.bookingNumbers,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 6),
+          child: Text(
+            'Số booking gần đây',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF667085),
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: bookingNumbers
+              .map(
+                (number) => ActionChip(
+                  label: Text(number),
+                  backgroundColor: const Color(0xFFF6F8FB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: const BorderSide(color: Color(0xFFE1E6ED)),
+                  ),
+                  onPressed: () {
+                    controller.text = number;
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+}
+
 class _InputField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final bool required;
   final int maxLines;
   final TextInputAction textInputAction;
+  final String? helperText;
 
   const _InputField({
     required this.controller,
@@ -560,6 +639,7 @@ class _InputField extends StatelessWidget {
     this.required = true,
     this.maxLines = 1,
     this.textInputAction = TextInputAction.next,
+    this.helperText,
   });
 
   @override
@@ -579,6 +659,8 @@ class _InputField extends StatelessWidget {
         },
         decoration: InputDecoration(
           labelText: label,
+          helperText: helperText,
+          helperMaxLines: 2,
           filled: true,
           fillColor: const Color(0xFFF6F8FB),
           border: OutlineInputBorder(

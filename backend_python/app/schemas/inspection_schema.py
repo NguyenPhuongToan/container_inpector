@@ -40,6 +40,14 @@ class FittingPhotoExportRequest(BaseModel):
     inspection_ids: list[str] = Field(min_length=1, max_length=5)
 
 
+class BookingNumberUpdateRequest(BaseModel):
+    booking_number: str = Field(min_length=1)
+
+
+class RecentBookingNumbersResponse(BaseModel):
+    booking_numbers: list[str] = Field(default_factory=list)
+
+
 class ScanContainerIdResponse(BaseModel):
     container_number: str
 

@@ -299,6 +299,41 @@ class ApiService {
     return getInspections(status: 'submitted');
   }
 
+  Future<List<String>> getRecentBookingNumbers() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/inspections/booking-numbers/recent'),
+      headers: _jsonHeaders,
+    );
+    _checkUnauthorized(response);
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load booking numbers: ${response.body}');
+    }
+
+    final Map<String, dynamic> data = jsonDecode(response.body);
+    final numbers = data['booking_numbers'];
+    if (numbers is List) {
+      return numbers.map((item) => item.toString()).toList();
+    }
+    return [];
+  }
+
+  Future<void> updateBookingNumber(String id, String bookingNumber) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/inspections/$id/booking-number'),
+      headers: {
+        ..._jsonHeaders,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'booking_number': bookingNumber}),
+    );
+    _checkUnauthorized(response);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to update booking number: ${response.body}');
+    }
+  }
+
   Future<void> acceptInspection(String inspectionId) {
     return _postAction('$baseUrl/inspections/$inspectionId/accept');
   }

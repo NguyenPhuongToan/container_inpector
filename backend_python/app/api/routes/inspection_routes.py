@@ -15,9 +15,11 @@ from app.core.constants import OCR_TEMP_ROOT, PHOTO_LABELS as SHARED_PHOTO_LABEL
 from app.database.db import get_db
 from app.database.models import ExportRecord, Inspection, InspectionImage, User
 from app.schemas.inspection_schema import (
+    BookingNumberUpdateRequest,
     ExportEmailResponse,
     FittingPhotoExportRequest,
     InspectionResponse,
+    RecentBookingNumbersResponse,
     ScanContainerIdResponse,
     ScanFlexitankIdResponse,
 )
@@ -250,6 +252,35 @@ async def list_inspections(
     return [_inspection_to_dict(inspection) for inspection in inspections]
 
 
+@router.get(
+    "/inspections/booking-numbers/recent",
+    response_model=RecentBookingNumbersResponse,
+)
+async def get_recent_booking_numbers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = db.scalars(
+        select(Inspection.booking_number)
+        .where(Inspection.booking_number != "")
+        .order_by(Inspection.created_at.desc())
+        .limit(100)
+    ).all()
+
+    seen: set[str] = set()
+    unique_numbers: list[str] = []
+    for booking_number in rows:
+        normalized = booking_number.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_numbers.append(normalized)
+        if len(unique_numbers) >= 10:
+            break
+
+    return {"booking_numbers": unique_numbers}
+
+
 @router.get("/inspections/{inspection_id}", response_model=InspectionResponse)
 async def get_inspection(
     inspection_id: str,
@@ -259,6 +290,32 @@ async def get_inspection(
     inspection = _find_inspection(db, inspection_id)
     if current_user.role == "worker" and inspection.worker_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
+    return _inspection_to_dict(inspection)
+
+
+@router.patch(
+    "/inspections/{inspection_id}/booking-number",
+    response_model=InspectionResponse,
+)
+async def update_booking_number(
+    inspection_id: str,
+    payload: BookingNumberUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("manager", "admin")),
+):
+    inspection = _find_inspection(db, inspection_id)
+    booking_number = payload.booking_number.strip()
+    if not booking_number:
+        raise HTTPException(
+            status_code=400,
+            detail="Booking number cannot be empty",
+        )
+
+    inspection.booking_number = booking_number
+    inspection.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(inspection)
+    inspection = _find_inspection(db, inspection_id)
     return _inspection_to_dict(inspection)
 
 
@@ -273,6 +330,11 @@ async def accept_inspection(
 ):
     inspection = _find_inspection(db, inspection_id)
     _ensure_submitted(inspection)
+    if not inspection.booking_number.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Booking number is required before accepting this inspection",
+        )
     inspection.status = "accepted"
     inspection.accepted_by_id = current_user.id
     inspection.updated_at = datetime.now(timezone.utc)
