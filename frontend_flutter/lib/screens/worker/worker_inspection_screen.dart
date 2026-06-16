@@ -31,7 +31,6 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
 
   late final List<ImageSlot> slots;
   bool isSubmitting = false;
-  List<String> _recentBookingNumbers = [];
 
   int get _addedPhotoCount => slots.where((slot) => slot.isCaptured).length;
 
@@ -40,18 +39,18 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     super.initState();
 
     final titles = [
-      'Container Door Number',
-      'Flexitank Serial Number',
-      'Front',
-      'Rear',
-      'Left Side',
-      'Right Side',
-      'Front Left',
-      'Front Right',
-      'Rear Left',
-      'Rear Right',
-      'Ceiling',
-      'Floor',
+      'Số serial container',
+      'Ảnh sau khi lắp đặt',
+      'Thông tin hàng hóa',
+      'Số serial flexitank',
+      'Ảnh lắp đặt bao (nhìn từ bên ngoài)',
+      'Ảnh lắp đặt bao (nhìn từ bên trong)',
+      'Sàn rìa trái',
+      'Sàn rìa phải',
+      'Cạnh trái container (bên ngoài)',
+      'Cạnh phải container (bên ngoài)',
+      'Ảnh sàn container',
+      'Ảnh tổng thể container',
     ];
 
     slots = List.generate(
@@ -65,21 +64,6 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     final fullName = AuthSession.user?.fullName ?? '';
     if (fullName.isNotEmpty) {
       _workerNameController.text = fullName;
-    }
-
-    _loadRecentBookingNumbers();
-  }
-
-  Future<void> _loadRecentBookingNumbers() async {
-    try {
-      final numbers = await _apiService.getRecentBookingNumbers();
-      if (!mounted) return;
-      setState(() {
-        _recentBookingNumbers = numbers;
-      });
-    } catch (_) {
-      // Recent booking numbers are a convenience feature only.
-      // Silently ignore failures so the form remains usable.
     }
   }
 
@@ -113,12 +97,12 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       slots[index].image = pickedFile;
     });
 
-    if (slots[index].title == 'Container Door Number' &&
+    if (slots[index].title == 'Số serial container' &&
         slots[index].image != null) {
       await _performContainerScan(slots[index].image!);
     }
 
-    if (slots[index].title == 'Flexitank Serial Number' &&
+    if (slots[index].title == 'Số serial flexitank' &&
         slots[index].image != null) {
       await _performFlexitankScan(slots[index].image!);
     }
@@ -129,18 +113,18 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Replace existing image?'),
+          title: const Text('Thay ảnh hiện tại?'),
           content: Text(
-            'This will replace the current photo for $title.',
+            'Thao tác này sẽ thay thế ảnh hiện tại của $title.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+              child: const Text('Hủy'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Replace'),
+              child: const Text('Thay thế'),
             ),
           ],
         );
@@ -162,7 +146,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         _containerNumberController.text = scannedId;
       });
 
-      _showMessage('Container number detected: $scannedId');
+      _showMessage('Đã nhận diện số container: $scannedId');
     } on TimeoutException {
       _showMessage('AI scan timed out. Please enter the number manually.');
     } catch (_) {
@@ -182,7 +166,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         _flexitankNumberController.text = scannedId;
       });
 
-      _showMessage('Flexitank serial detected: $scannedId');
+      _showMessage('Đã nhận diện số serial flexitank: $scannedId');
     } on TimeoutException {
       _showMessage('AI scan timed out. Please enter the serial manually.');
     } catch (_) {
@@ -199,14 +183,22 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
       return;
     }
 
-    final isFormValid = _formKey.currentState?.validate() ?? false;
+    final isFormValid = _formKey.currentState?.validate() ?? true;
     final images = slots
         .where((slot) => slot.image != null)
         .map((slot) => slot.image!)
         .toList();
 
-    if (!isFormValid || images.length != slots.length) {
-      _showMessage('Please fill the form and capture all 12 photos.');
+    if (!isFormValid) {
+      _showMessage('Vui lòng điền đầy đủ thông tin bắt buộc.');
+      return;
+    }
+    if (images.length != slots.length) {
+      _showMessage('Chụp đủ 12 ảnh. Hiện tại: ${images.length}/12.');
+      return;
+    }
+    if (false) {
+      _showMessage('Vui lòng điền đầy đủ thông tin và chụp đủ 12 ảnh.');
       return;
     }
 
@@ -228,7 +220,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Inspection submitted successfully!'),
+          content: Text('Đã gửi phiếu kiểm tra thành công!'),
           backgroundColor: Color(0xFF437A22),
           duration: Duration(seconds: 2),
         ),
@@ -242,7 +234,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     } on TimeoutException {
       _showMessage('Upload timed out. Please try again.');
     } catch (_) {
-      _showMessage('Could not submit. Please check the backend connection.');
+      _showMessage('Không thể gửi. Vui lòng kiểm tra kết nối với backend.');
     } finally {
       if (mounted) {
         setState(() {
@@ -282,7 +274,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  '$_addedPhotoCount / 12 photos added',
+                  '$_addedPhotoCount / 12 ảnh đã chụp',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -301,7 +293,6 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                   workerNameController: _workerNameController,
                   portNameController: _portNameController,
                   notesController: _notesController,
-                  recentBookingNumbers: _recentBookingNumbers,
                 ),
                 const SizedBox(height: 24),
                 LayoutBuilder(
@@ -343,7 +334,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                           )
                         : const Icon(Icons.cloud_upload_outlined),
                     label: Text(
-                      isSubmitting ? 'Submitting...' : 'Submit Inspection',
+                      isSubmitting ? 'Đang gửi...' : 'Gửi phiếu kiểm tra',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -491,7 +482,6 @@ class _ContainerInfoForm extends StatelessWidget {
   final TextEditingController workerNameController;
   final TextEditingController portNameController;
   final TextEditingController notesController;
-  final List<String> recentBookingNumbers;
 
   const _ContainerInfoForm({
     required this.formKey,
@@ -502,7 +492,6 @@ class _ContainerInfoForm extends StatelessWidget {
     required this.workerNameController,
     required this.portNameController,
     required this.notesController,
-    this.recentBookingNumbers = const [],
   });
 
   @override
@@ -539,17 +528,7 @@ class _ContainerInfoForm extends StatelessWidget {
               controller: bookingNumberController,
               label: 'Số booking',
               required: false,
-              helperText:
-                  'Không bắt buộc. Quản lý sẽ xác nhận số booking khi duyệt.',
             ),
-            if (recentBookingNumbers.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _RecentBookingSuggestions(
-                  bookingNumbers: recentBookingNumbers,
-                  controller: bookingNumberController,
-                ),
-              ),
             _InputField(
               controller: truckNumberController,
               label: 'Số xe',
@@ -576,62 +555,12 @@ class _ContainerInfoForm extends StatelessWidget {
   }
 }
 
-class _RecentBookingSuggestions extends StatelessWidget {
-  final List<String> bookingNumbers;
-  final TextEditingController controller;
-
-  const _RecentBookingSuggestions({
-    required this.bookingNumbers,
-    required this.controller,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 6),
-          child: Text(
-            'Số booking gần đây',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF667085),
-            ),
-          ),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: bookingNumbers
-              .map(
-                (number) => ActionChip(
-                  label: Text(number),
-                  backgroundColor: const Color(0xFFF6F8FB),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: const BorderSide(color: Color(0xFFE1E6ED)),
-                  ),
-                  onPressed: () {
-                    controller.text = number;
-                  },
-                ),
-              )
-              .toList(),
-        ),
-      ],
-    );
-  }
-}
-
 class _InputField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final bool required;
   final int maxLines;
   final TextInputAction textInputAction;
-  final String? helperText;
 
   const _InputField({
     required this.controller,
@@ -639,7 +568,6 @@ class _InputField extends StatelessWidget {
     this.required = true,
     this.maxLines = 1,
     this.textInputAction = TextInputAction.next,
-    this.helperText,
   });
 
   @override
@@ -659,8 +587,6 @@ class _InputField extends StatelessWidget {
         },
         decoration: InputDecoration(
           labelText: label,
-          helperText: helperText,
-          helperMaxLines: 2,
           filled: true,
           fillColor: const Color(0xFFF6F8FB),
           border: OutlineInputBorder(
