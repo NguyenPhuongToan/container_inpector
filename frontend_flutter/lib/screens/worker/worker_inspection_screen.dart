@@ -70,6 +70,16 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
     // Maps to original photo numbers: 9,10,11,12,7,8,4,5,6,3,2,1
     displayIndexOrder = const [8, 9, 10, 11, 6, 7, 3, 4, 5, 2, 1, 0];
 
+    // Cosmetic badge numbers (1-12) matching the on-screen order above.
+    // This does NOT affect angle/upload order/PPTX export.
+    for (var position = 0; position < displayIndexOrder.length; position++) {
+      slots[displayIndexOrder[position]] = ImageSlot(
+        angle: slots[displayIndexOrder[position]].angle,
+        title: slots[displayIndexOrder[position]].title,
+        displayNumber: position + 1,
+      );
+    }
+
     final fullName = AuthSession.user?.fullName ?? '';
     if (fullName.isNotEmpty) {
       _workerNameController.text = fullName;
@@ -542,6 +552,7 @@ class _ContainerInfoForm extends StatelessWidget {
             _InputField(
               controller: truckNumberController,
               label: 'Số xe',
+              required: false,
             ),
             _InputField(
               controller: workerNameController,
@@ -550,6 +561,7 @@ class _ContainerInfoForm extends StatelessWidget {
             _InputField(
               controller: portNameController,
               label: 'Cảng / Địa điểm',
+              required: false,
             ),
             _InputField(
               controller: notesController,

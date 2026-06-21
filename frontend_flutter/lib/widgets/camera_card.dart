@@ -102,7 +102,7 @@ class _CameraCardState extends State<CameraCard> {
                   ),
                 ),
                 child: Text(
-                  '${widget.slot.angle}',
+                  '${widget.slot.displayNumber}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
