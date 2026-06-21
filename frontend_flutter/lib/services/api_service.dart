@@ -231,6 +231,8 @@ class ApiService {
     String? containerNumber,
     String? workerName,
     String? portName,
+    String? bookingNumber,
+    String? date,
   }) async {
     final query = <String, String>{};
     if (status != null && status.isNotEmpty) query['status'] = status;
@@ -242,6 +244,12 @@ class ApiService {
     }
     if (portName != null && portName.isNotEmpty) {
       query['port_name'] = portName;
+    }
+    if (bookingNumber != null && bookingNumber.isNotEmpty) {
+      query['booking_number'] = bookingNumber;
+    }
+    if (date != null && date.isNotEmpty) {
+      query['date'] = date;
     }
 
     final uri = Uri.parse('$baseUrl/inspections').replace(

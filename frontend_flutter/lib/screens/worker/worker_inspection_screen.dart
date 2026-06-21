@@ -30,6 +30,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
   final _notesController = TextEditingController();
 
   late final List<ImageSlot> slots;
+  late final List<int> displayIndexOrder;
   bool isSubmitting = false;
 
   int get _addedPhotoCount => slots.where((slot) => slot.isCaptured).length;
@@ -38,6 +39,9 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
   void initState() {
     super.initState();
 
+    // IMPORTANT: this list order is what gets uploaded to the backend and
+    // directly determines each photo's angle + position in the PPTX export.
+    // DO NOT reorder this list — it must stay exactly as-is.
     final titles = [
       'Số serial container',
       'Ảnh sau khi lắp đặt',
@@ -60,6 +64,11 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
         title: titles[index],
       ),
     );
+
+    // On-screen display order ONLY (grid rendering). Refers to slots above
+    // by their original index (0-based), so upload order stays untouched.
+    // Maps to original photo numbers: 9,10,11,12,7,8,4,5,6,3,2,1
+    displayIndexOrder = const [8, 9, 10, 11, 6, 7, 3, 4, 5, 2, 1, 0];
 
     final fullName = AuthSession.user?.fullName ?? '';
     if (fullName.isNotEmpty) {
@@ -300,7 +309,7 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                     final columns = constraints.maxWidth >= 720 ? 4 : 2;
 
                     return GridView.builder(
-                      itemCount: slots.length,
+                      itemCount: displayIndexOrder.length,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -309,10 +318,11 @@ class _WorkerInspectionScreenState extends State<WorkerInspectionScreen> {
                         mainAxisSpacing: 20,
                         childAspectRatio: 0.76,
                       ),
-                      itemBuilder: (context, index) {
+                      itemBuilder: (context, gridPosition) {
+                        final slotIndex = displayIndexOrder[gridPosition];
                         return CameraCard(
-                          slot: slots[index],
-                          onTap: () => captureImage(index),
+                          slot: slots[slotIndex],
+                          onTap: () => captureImage(slotIndex),
                         );
                       },
                     );

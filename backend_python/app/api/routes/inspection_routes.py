@@ -5,7 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy import select
+from sqlalchemy import func as sql_func, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -15,11 +15,9 @@ from app.core.constants import OCR_TEMP_ROOT, PHOTO_LABELS as SHARED_PHOTO_LABEL
 from app.database.db import get_db
 from app.database.models import ExportRecord, Inspection, InspectionImage, User
 from app.schemas.inspection_schema import (
-    BookingNumberUpdateRequest,
     ExportEmailResponse,
     FittingPhotoExportRequest,
     InspectionResponse,
-    RecentBookingNumbersResponse,
     ScanContainerIdResponse,
     ScanFlexitankIdResponse,
 )
@@ -232,6 +230,8 @@ async def list_inspections(
     container_number: str | None = None,
     worker_name: str | None = None,
     port_name: str | None = None,
+    booking_number: str | None = None,
+    date: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -244,41 +244,22 @@ async def list_inspections(
         query = query.where(Inspection.worker_name.ilike(f"%{worker_name}%"))
     if port_name:
         query = query.where(Inspection.port_name.ilike(f"%{port_name}%"))
+    if booking_number:
+        query = query.where(Inspection.booking_number.ilike(f"%{booking_number}%"))
+    if date:
+        try:
+            parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="date must be in YYYY-MM-DD format")
+        query = query.where(
+            sql_func.date(Inspection.created_at) == parsed_date
+        )
     if current_user.role == "worker":
         query = query.where(Inspection.worker_id == current_user.id)
 
     query = query.order_by(Inspection.created_at.desc())
     inspections = db.scalars(query).all()
     return [_inspection_to_dict(inspection) for inspection in inspections]
-
-
-@router.get(
-    "/inspections/booking-numbers/recent",
-    response_model=RecentBookingNumbersResponse,
-)
-async def get_recent_booking_numbers(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    rows = db.scalars(
-        select(Inspection.booking_number)
-        .where(Inspection.booking_number != "")
-        .order_by(Inspection.created_at.desc())
-        .limit(100)
-    ).all()
-
-    seen: set[str] = set()
-    unique_numbers: list[str] = []
-    for booking_number in rows:
-        normalized = booking_number.strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        unique_numbers.append(normalized)
-        if len(unique_numbers) >= 10:
-            break
-
-    return {"booking_numbers": unique_numbers}
 
 
 @router.get("/inspections/{inspection_id}", response_model=InspectionResponse)
@@ -293,32 +274,6 @@ async def get_inspection(
     return _inspection_to_dict(inspection)
 
 
-@router.patch(
-    "/inspections/{inspection_id}/booking-number",
-    response_model=InspectionResponse,
-)
-async def update_booking_number(
-    inspection_id: str,
-    payload: BookingNumberUpdateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("manager", "admin")),
-):
-    inspection = _find_inspection(db, inspection_id)
-    booking_number = payload.booking_number.strip()
-    if not booking_number:
-        raise HTTPException(
-            status_code=400,
-            detail="Booking number cannot be empty",
-        )
-
-    inspection.booking_number = booking_number
-    inspection.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(inspection)
-    inspection = _find_inspection(db, inspection_id)
-    return _inspection_to_dict(inspection)
-
-
 @router.post(
     "/inspections/{inspection_id}/accept",
     response_model=InspectionResponse,
@@ -330,11 +285,6 @@ async def accept_inspection(
 ):
     inspection = _find_inspection(db, inspection_id)
     _ensure_submitted(inspection)
-    if not inspection.booking_number.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Booking number is required before accepting this inspection",
-        )
     inspection.status = "accepted"
     inspection.accepted_by_id = current_user.id
     inspection.updated_at = datetime.now(timezone.utc)

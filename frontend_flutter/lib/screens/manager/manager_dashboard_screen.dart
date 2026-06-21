@@ -19,7 +19,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   final _apiService = ApiService();
   final _containerController = TextEditingController();
   final _workerController = TextEditingController();
-  final _portController = TextEditingController();
+  final _bookingController = TextEditingController();
+  final _dateController = TextEditingController();
+  DateTime? _selectedDate;
   String _status = 'submitted';
   int _pendingCount = 0;
   int _lastKnownPendingCount = 0;
@@ -44,7 +46,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     _pollingTimer?.cancel();
     _containerController.dispose();
     _workerController.dispose();
-    _portController.dispose();
+    _bookingController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -53,7 +56,10 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
       status: _status.isEmpty ? null : _status,
       containerNumber: _containerController.text.trim(),
       workerName: _workerController.text.trim(),
-      portName: _portController.text.trim(),
+      bookingNumber: _bookingController.text.trim(),
+      date: _selectedDate != null
+          ? '${_selectedDate!.year.toString().padLeft(4, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+          : null,
     );
   }
 
@@ -74,6 +80,23 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
   }
 
   void _filterByStatus(String status) => _setStatus(status);
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text =
+            '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      });
+    }
+  }
 
   Future<void> _loadPendingCount() async {
     try {
@@ -259,13 +282,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
             status: _status,
             containerController: _containerController,
             workerController: _workerController,
-            portController: _portController,
+            bookingController: _bookingController,
+            dateController: _dateController,
+            onPickDate: _pickDate,
             onStatusChanged: _setStatus,
             onApply: refresh,
             onClear: () {
               _containerController.clear();
               _workerController.clear();
-              _portController.clear();
+              _bookingController.clear();
+              _dateController.clear();
+              _selectedDate = null;
               _setStatus('submitted');
             },
           ),
@@ -532,7 +559,9 @@ class _FilterPanel extends StatelessWidget {
   final String status;
   final TextEditingController containerController;
   final TextEditingController workerController;
-  final TextEditingController portController;
+  final TextEditingController bookingController;
+  final TextEditingController dateController;
+  final VoidCallback onPickDate;
   final ValueChanged<String> onStatusChanged;
   final VoidCallback onApply;
   final VoidCallback onClear;
@@ -541,7 +570,9 @@ class _FilterPanel extends StatelessWidget {
     required this.status,
     required this.containerController,
     required this.workerController,
-    required this.portController,
+    required this.bookingController,
+    required this.dateController,
+    required this.onPickDate,
     required this.onStatusChanged,
     required this.onApply,
     required this.onClear,
@@ -605,10 +636,18 @@ class _FilterPanel extends StatelessWidget {
                     onSubmitted: onApply,
                   ),
                   _FilterField(
-                    controller: portController,
-                    label: 'Port',
-                    icon: Icons.location_on_rounded,
+                    controller: bookingController,
+                    label: 'Booking Number',
+                    icon: Icons.confirmation_number_rounded,
                     onSubmitted: onApply,
+                  ),
+                  _FilterField(
+                    controller: dateController,
+                    label: 'Date',
+                    icon: Icons.calendar_today_rounded,
+                    onSubmitted: onApply,
+                    readOnly: true,
+                    onTap: onPickDate,
                   ),
                 ];
 
@@ -697,24 +736,39 @@ class _FilterField extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onSubmitted;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   const _FilterField({
     required this.controller,
     required this.label,
     required this.icon,
     required this.onSubmitted,
+    this.readOnly = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      readOnly: readOnly,
+      onTap: onTap,
       textInputAction: TextInputAction.search,
       onSubmitted: (_) => onSubmitted(),
       decoration: InputDecoration(
         isDense: true,
         labelText: label,
         prefixIcon: Icon(icon),
+        suffixIcon: readOnly && controller.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () {
+                  controller.clear();
+                  onSubmitted();
+                },
+              )
+            : null,
         border: const OutlineInputBorder(),
       ),
     );
