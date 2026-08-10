@@ -23,9 +23,9 @@ def extract_container_number_with_gemini(image_path: Path) -> str:
         raise GeminiServiceError(f"Image not found: {image_path}")
 
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-lite")
     mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
-    prompt = (
+    prompt = (  
         "Read the ISO 6346 shipping container number from this image. "
         "Return only the 11-character container number, or NOT_FOUND."
     )
@@ -59,7 +59,7 @@ def extract_flexitank_number_with_gemini(image_path: Path) -> str:
         raise GeminiServiceError(f"Image not found: {image_path}")
 
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash-lite")
     mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
     prompt = (
         "Read the flexitank serial number from this image. "
